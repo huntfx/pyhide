@@ -71,10 +71,10 @@ class ImageStore:
         if cutoffModeHelp == True:
             print "Cutoff modes:"
             print "0: Move towards 0 (black)"
-            print "1: Move towards 128"
-            print "2: Move towards 255 (white)"
-            print "3: Move towards 64"
-            print "4: Move towards 196"
+            print "1: Move towards 64"
+            print "2: Move towards 128"
+            print "3: Move towards 192"
+            print "4: Move towards 255 (white)"
             return None
         
         #Custom cutoff mode
@@ -959,11 +959,6 @@ class ImageStore:
         
         cutoffRange = pow( 2, bitsPerColour )
         
-        # 0 = 0 (0)
-        # 1 = 3 (64)
-        # 2 = 1 (128)
-        # 3 = 4 (192)
-        # 4 = 2 (255)
         colourMinIncrease = 0
         colourMaxIncrease = cutoffMode*64-cutoffRange-1
         colourMaxReduce = 255
@@ -974,41 +969,7 @@ class ImageStore:
         
         return colourIncreaseRange, colourReduceRange
         
-        if cutoffMode == 0:
-            colourMinIncrease = 0
-            colourMaxIncrease = -1
-            colourMinReduce = cutoffRange
-            colourMaxReduce = 255
-            
-        elif cutoffMode == 2:
-            colourMinIncrease = 0
-            colourMaxIncrease = 255-cutoffRange
-            colourMinReduce = 0
-            colourMaxReduce = -1
         
-        elif cutoffMode == 3:
-            colourMinIncrease = 0
-            colourMaxIncrease = 64-cutoffRange
-            colourMinReduce = 64+cutoffRange
-            colourMaxReduce = 255
-            
-        elif cutoffMode == 4:
-            colourMinIncrease = 0
-            colourMaxIncrease = 196-cutoffRange
-            colourMinReduce = 196+cutoffRange
-            colourMaxReduce = 255
-        
-        else:
-            colourMinIncrease = 0
-            colourMaxIncrease = 128-cutoffRange
-            colourMinReduce = 128+cutoffRange
-            colourMaxReduce = 255
-            
-        colourIncreaseRange = range( colourMinIncrease, colourMaxIncrease+1 )
-        colourReduceRange = range( colourMinReduce, colourMaxReduce+1 )
-        
-        return colourIncreaseRange, colourReduceRange
-
     def readImage( self, location ):
         
         location = str( location )
