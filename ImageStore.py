@@ -6,17 +6,20 @@ import base64
 class ImageStore:
 
     def __init__( self, imageName="ImageDataStore" ):
+    
         self.imageDataPadding = [116, 64, 84, 123, 93, 73, 106]
-        self.imageName = str( imageName )
-        if self.imageName[:-1] == ":":
+        self.imageName = str( imageName ).replace( "\\", "/" ).rsplit( '.', 1 )[0]
+        if self.imageName[-1:] == ":":
             self.imageName += "/"
-        if self.imageName[:-1] == "/" or self.imageName[:-1] == "\\":
+        if self.imageName[-1:] == "/":
             self.imageName += "ImageDataStore"
 
     def __repr__( self ):
-        return "Use this to store or read data from an image.\nUsage:\n - ImageStore().write(input), ImageStore().read()\nYou can also define the name and location of the image.\n - ImageStore( 'C:\filename )'"
+        return "Use this to store or read data from an image.\nUsage:\n - ImageStore().write(input), ImageStore().read()\nYou can also define the name and location of the image.\n - ImageStore( 'C:\Filename' )"
     
     def write( self, input, ratioWidth=0.52 ):
+        
+        heightPadding = 10
         
         encodedData = base64.b64encode( cPickle.dumps( input ) )
         pixelData = [int( format( ord( letter ) ) ) for letter in encodedData]
@@ -41,7 +44,7 @@ class ImageStore:
             #Make sure it is divisible by 3
             width /= 3
             width *= 3
-            height = int( round( pow( width, 1/( 1/( 1-ratioWidth )-1 ) ), -1 ) )+10
+            height = int( round( pow( width, 1/( 1/( 1-ratioWidth )-1 ) ), 0 ) )+heightPadding
                 
         #Draw image
         imageOutput = Image.new("RGB", ( width, height ) )
@@ -67,6 +70,7 @@ class ImageStore:
 
     def read( self ):
     
+        print self.imageName + ".png"
         #Read image
         try:
             imageInput = Image.open( self.imageName + ".png" )
