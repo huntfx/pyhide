@@ -28,6 +28,8 @@ class ImageStore:
     outputProgressIterations = 2**16
     outputProgressTime = 5
     
+    maxCutoffModes = 7
+    
     def __init__( self, imageName=defaultImageName, **kwargs ):
     
         self.imageDataPadding = [116, 64, 84, 123, 93, 73, 106]
@@ -96,6 +98,7 @@ class ImageStore:
        
         #If image should be output with all cutoff modes
         allCutoffModes = checkInputs.checkBooleanKwargs( kwargs, False, 'a', 'all', 'aCM', 'allCutoff', 'allCutoffs', 'allModes', 'allCutoffMode', 'allCutoffModes' )
+        allOutputs = []
         if allCutoffModes == True:
             try:
                 customCutoffMode = kwargs['allCutoffModesNum'] + 1
@@ -103,10 +106,12 @@ class ImageStore:
                 customCutoffMode = 0
             kwargs['allCutoffModesNum'] = customCutoffMode
             self.imageName = self.imageName.replace( ".png", "" ).replace( ".CM" + str( customCutoffMode-1 ), "" ) + ".CM" + str( customCutoffMode ) + ".png"
-            if customCutoffMode < 4:
-                ImageStore( self.imageName ).write( input, **kwargs )
+            if customCutoffMode < self.maxCutoffModes:
+                otherURLS = ImageStore( self.imageName ).write( input, **kwargs )
+                if otherURLS != None:
+                    allOutputs += otherURLS
             else:
-                customCutoffMode = 4
+                customCutoffMode = self.maxCutoffModes
        
         #Ratio of width to height
         validArgs = checkInputs.validKwargs( kwargs, 'r', 'ratio', 'sizeRatio', 'widthRatio', 'heightRatio', 'widthToHeightRatio' )
@@ -293,14 +298,14 @@ class ImageStore:
             
             if returnCustomImageInfo == False:
                 if self.printProgress == True:
-                    print "Checking image has enough pixels to store the input data. This will take a while."
+                    print "Checking image has enough pixels to store the input data. This may take a while."
             
             bitsPerPixel = 1
             
             #Get correct range
             cutoffModeAmount = {}
             colourRange = {}
-            cutoffModes = range( 8 )
+            cutoffModes = range( self.maxCutoffModes+1 )
             invalidCutoffMode = len( cutoffModes )
             
             #Set up valid pixels dictionary
@@ -321,8 +326,7 @@ class ImageStore:
             if customCutoffMode != None:
                 storedCutoffMode = customCutoffMode
             
-            print validPixels
-            if successfulRead == False and len( validPixels[storedCutoffMode] ) == 0:
+            if successfulRead == False or len( validPixels[storedCutoffMode] ) == 0:
 
                 #Calculate max data that can be stored
                 print "Calculating the best method to store data..."
@@ -341,17 +345,15 @@ class ImageStore:
                             if self.printProgress == True:
                                 print " " + str( round( 100 * totalPixelCount / imageSize, 1 ) ) + "% completed"
                 
-                    #Links with above comment, valid pixels has no data stored
-                    if storedCutoffMode == invalidCutoffMode:
                         for rgb in range( 3 ):
                             rawData.append( pixels[rgb] )
                             
-                            #Count all valid values to find best cutoff mode
-                            if totalPixelCount > 0:
-                                for i in cutoffModes:
-                                
-                                    if pixels[rgb] in colourRange[i][0] or pixels[rgb] in colourRange[i][1]:
-                                        cutoffModeAmount[i] += 1
+                            if storedCutoffMode == invalidCutoffMode:
+                                #Count all valid values to find best cutoff mode
+                                if totalPixelCount > 0:
+                                    for i in cutoffModes:
+                                        if pixels[rgb] in colourRange[i][0] or pixels[rgb] in colourRange[i][1]:
+                                            cutoffModeAmount[i] += 1
                                     
                     totalPixelCount += 1
                     
@@ -366,7 +368,7 @@ class ImageStore:
                 
                 #Find maximum size image can store for bits per colour
                 nextTime = time()+self.outputProgressTime
-                    
+                
                 pixelCount = 0
                 totalCount = float( 8*len( rawData ) )
                 for i in range( 8 ):
@@ -688,7 +690,10 @@ class ImageStore:
                     
             if self.printProgress == True:
                 print "Done."
-            return outputList
+            
+            allOutputs += [outputList]
+            allOutputs.reverse()
+            return allOutputs
         else:
             return None
 
