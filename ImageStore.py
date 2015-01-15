@@ -20,7 +20,7 @@ class ImageStore:
     defaultImageName = "ImageDataStore.png"
     pythonDirectory = os.getcwd()
     userDirectory = os.path.expanduser( "~" )
-    defaultDirectory = userDirectory
+    defaultDirectory = pythonDirectory
 
     def __init__( self, imageName=defaultImageName ):
     
@@ -43,7 +43,7 @@ class ImageStore:
         return "".join( returnText )
     
     #This is just temporary, eventually I'll try use this to allow custom images
-    def store( self ):
+    def writeZip( self ):
     
         #Define the text
         timeOfCreation = datetime.fromtimestamp( time() ).strftime( '%d/%m/%Y %H:%M' )
@@ -60,7 +60,9 @@ class ImageStore:
         
         #Write zip file
         try:
-            zip.writestr( 'Infomation.txt', "".join( infoText ) )
+            zip.writestr( 'infomation.txt', "".join( infoText ) )
+            zip.writestr( 'version', str( versionNumber ) )
+            zip.writestr( 'creation', str( getpass.getuser() ) + "@" + str( time() ) )
         finally:
             zip.close()
         
@@ -68,10 +70,42 @@ class ImageStore:
         locationOfZip = zipLocation.replace( "/", "\\\\" )
         
         #Copy zip file into picture
-        call("copy /b " + locationOfImage + " + " + locationOfZip + " " + locationOfImage, shell=True)
+        call( 'copy /b "' + locationOfImage + '" + "' + locationOfZip + '" "' + locationOfImage + '"', shell=True)
         
         os.remove( zipLocation )
+    
+    def readZip( self ):
         
+        #Read if zip file
+        if "http://" in self.imageName:
+            imageIO = cStringIO.StringIO( urllib.urlopen( self.imageName ).read() )
+            if zipfile.is_zipfile( imageIO ) == True:
+                zip = zipfile.ZipFile( imageIO )
+        elif zipfile.is_zipfile( self.imageName ) == True:
+            zip = zipfile.ZipFile( self.imageName )
+        else:
+            zip = None
+        
+        #Read zip data
+        if zip != None:
+            nameList = zip.namelist()
+            if 'version' in nameList:
+                versionNumber = zip.read( 'version' )
+            else:
+                versionNumber = "1.0"
+            if 'creation' in nameList:
+                creation = zip.read( 'creation' )
+            else:
+                creation = None
+            if creation != None:
+                creationName = creation.split( "@" )[0]
+                creationTime = creation.split( "@" )[1]
+        
+            return [versionNumber, creationTime, creationName]
+        
+        else:
+            return None
+                
     
     def write( self, input, **kwargs ):
         
@@ -79,7 +113,7 @@ class ImageStore:
         try:
             heightPadding = int( kwargs['padding'] )
         except:
-            heightPadding = 10
+            heightPadding = 12
         #Get upload info
         try:
             if kwargs['upload'] == True:
@@ -188,12 +222,12 @@ class ImageStore:
                         failText = savingFailed
                         self.imageName = None
         
-        outputText = [self.imageName]
+        outputText = [self.imageName.replace( "\\", "/" )]
         
         #Make sure image exists first
         if self.imageName != None:
         
-            self.store()
+            self.writeZip()
             
             #Upload to imgur
             if upload == True:
@@ -222,6 +256,8 @@ class ImageStore:
                 imageInput = Image.open( self.imageName )
             except:
                 return "No image found."
+     
+        originalVersionNumber, originalCreationTime, originalCreationName = self.readZip()
         
         #Store pixel info
         rawData = []
