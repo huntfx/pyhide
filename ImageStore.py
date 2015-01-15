@@ -1,15 +1,15 @@
 '''
 Author: Peter Hunt
 Website: peterhuntvfx.co.uk
-Version: 0.2
+Version: 0.3
 '''
 from PIL import Image
 from random import randint
 from subprocess import call
 from time import time
 from datetime import datetime
-import cPickle, base64, urllib, cStringIO, os, pyimgur, webbrowser, zipfile, getpass, zlib
-versionNumber = '0.2.1'
+import cPickle, base64, urllib, cStringIO, os, pyimgur, webbrowser, zipfile, getpass, zlib, re
+versionNumber = '0.3'
 
 #This will let it check for any updates.
 #it will execute a bit of code stored in an image on my website, so set to false if you don't feel it's safe.
@@ -41,6 +41,35 @@ class ImageStore:
         returnText.append( "You can also define the name and location of the image.\n" )
         returnText.append( " - ImageStore( 'C:\Filename' )" )
         return "".join( returnText )
+    
+    def encodeData( self, input, **kwargs ):
+        #Get binary info
+        try:
+            if kwargs['binary'] == True:
+                binary = True
+            else:
+                binary = False
+        except:
+            binary = False
+        encodedData = base64.b64encode( cPickle.dumps( input ) )
+        if binary == False
+            pixelData = [int( format( ord( letter ) ) ) for letter in encodedData]
+            pixelData += self.imageDataPadding
+            #Pad to end with multiple of 3
+            for i in range( 3-len( pixelData ) ):
+                pixelData += [255]
+        else:
+            pixelData = [ format( ord( letter ), "b" ).zfill( 8 ) for letter in encodedData]
+            pixelData += [ format( number, "b" ).zfill( 8 ) for number in self.imageDataPadding]
+            for i in range( 3-len( pixelData ) ):
+                pixelData += '11111111'
+            
+        return pixelData
+    
+    def decodeData( self, rawData ):
+        encodedData = "".join( [chr( pixel ) for pixel in rawData] )
+        outputData = cPickle.loads( base64.b64decode( encodedData ) )
+        return outputData
     
     #This is just temporary, eventually I'll try use this to allow custom images
     #It'll write the original imagine to the file, and the difference between the two will contain the data
@@ -156,12 +185,7 @@ class ImageStore:
         except:
             disableInfo = False     
         
-        encodedData = base64.b64encode( cPickle.dumps( input ) )
-        pixelData = [int( format( ord( letter ) ) ) for letter in encodedData]
-        pixelData += self.imageDataPadding
-        #Pad to end with multiple of 3
-        for i in range( 3-len( pixelData ) ):
-            rawData += [255]
+        pixelData = self.encodeData( input )
         
         #Set image info
         minimumWidth = 16
@@ -299,9 +323,8 @@ class ImageStore:
         #Store pixel info
         rawData = []
         for pixels in imageInput.getdata():
-            rawData.append( pixels[0] )
-            rawData.append( pixels[1] )
-            rawData.append( pixels[2] )
+            for rgb in range( 3 ):
+                rawData.append( pixels[rgb] )
         
         #Truncate end of file
         try:
@@ -318,8 +341,7 @@ class ImageStore:
             print "File is probably corrupted."
         
         #Decode data
-        encodedData = "".join( [chr( pixel ) for pixel in rawData] )
-        outputData = cPickle.loads( base64.b64decode( encodedData ) )
+        self.decodeData( rawData )
         
         return outputData
 
