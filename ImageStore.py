@@ -43,14 +43,16 @@ class ImageStore:
     #This is just temporary, eventually I'll try use this to allow custom images
     def store( self ):
     
-        #Get text from website
+        #Get text
         try:
             infoText = ImageStore( "http://images.peterhuntvfx.co.uk/code/ISInfo.png" ).read()
         except:
             infoText = "Code by Peter Hunt."
         
         #Compress into zip file
-        zip = zipfile.ZipFile( 'ImageInfo.zip' , mode='w', compression=zipfile.ZIP_DEFLATED )
+        zipName = "ImageInfo.zip"
+        zipLocation = str( self.imageName.rsplit( '/', 1 )[0] + "/" + zipName )
+        zip = zipfile.ZipFile( zipLocation, mode='w', compression=zipfile.ZIP_DEFLATED )
         
         #Write zip file
         try:
@@ -58,19 +60,23 @@ class ImageStore:
         finally:
             zip.close()
         
-        locationOfImage = self.imageName.replace( "/", "\\" )
-        locationOfZip = str( self.imageName.rsplit( '/', 1 )[0] + "/ImageInfo.zip" ).replace( "/", "\\" )
+        locationOfImage = self.imageName.replace( "/", "\\\\" )
+        locationOfZip = zipLocation.replace( "/", "\\\\" )
         
-        call("copy /b " + locationOfImage + " + " + locationOfImage + " " + locationOfImage, shell=True)
+        #Copy zip file into picture
+        call("copy /b " + locationOfImage + " + " + locationOfZip + " " + locationOfImage, shell=True)
+        
+        os.remove( zipLocation )
+        #print "copy /b " + locationOfImage + " + " + locationOfZip + " " + locationOfImage
         
     
     def write( self, input, **kwargs ):
         
+        #Get height padding info
         try:
             heightPadding = int( kwargs['padding'] )
         except:
             heightPadding = 10
-            
         #Get upload info
         try:
             if kwargs['upload'] == True:
@@ -91,7 +97,7 @@ class ImageStore:
             if 0 < float( str( kwargs['ratio'] ) ) < 1:
                 ratioWidth = float( str( kwargs['ratio'] ) )
         except:
-            ratioWidth=0.52
+            ratioWidth=0.52        
         
         encodedData = base64.b64encode( cPickle.dumps( input ) )
         pixelData = [int( format( ord( letter ) ) ) for letter in encodedData]
