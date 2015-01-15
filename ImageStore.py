@@ -164,26 +164,43 @@ class ImageStore:
                     #Upload custom image and switch path to URL
                     uploadCustomImage = checkInputs.checkBooleanKwargs( kwargs, True, 'uI', 'uC', 'uO', 'uCI', 'uploadCustom', 'uploadOriginal', 'uploadCustomImage', 'uploadOriginalImage', 'uploadCustomURL', 'uploadOriginalURL' )
                     if uploadCustomImage == True and customImageInput != None:
+                        
                         if "http://i.imgur" not in customImageInputPath and "http:s//i.imgur" not in customImageInputPath:
+                            
                             if self.printProgress == True:
                                 print "Uploading original image..."
+                            
                             uploadedImageURL = self.uploadImage( customImageInputPath, ignoreSize = True )
+                            
                             if uploadedImageURL != None:
                                 if self.printProgress == True:
                                     print "Link to original image is " + str( uploadedImageURL ) + "."
+                                    
                                 if writeToINI == False:
+                                
                                     if self.printProgress == True:
                                         print "Set this link as the custom image input to avoid re-uploading the same image each time."
+                                
                                 customImageInputPath = str( uploadedImageURL )
                                 customImageInput = self.readImage( uploadedImageURL )
+                                                                
                             else:
                                 if self.printProgress == True:
                                     print "Original image URL will not be stored within the image."
                                 customImageInputPath = ""
+                                
                     else:
                         customImageInputPath = ""
         
         else:
+            useBinary = False
+            
+            
+        #Fix for gif images
+        if customImageInputPath[-4:]:
+            print "Error: Can't use GIF images to write over, disabling the custom image."
+            customImageInput = None
+            customImageInputPath = ""
             useBinary = False
         
         #Print how large the input data is
@@ -719,6 +736,7 @@ class ImageStore:
                     print "Failed to decode data, the custom original image specified may not be the original one used."
                     if len( customImageURL ) > 0:
                         print "Failed to decode data, however here is a URL to the correct image contained within the file."
+                        print "If you are using the original image, it may have just resized after being uploaded to Imgur."
                     else:
                         print "No URL was found stored in the image, you may have linked to the wrong image."
                 elif len( customImageURL ) > 0:
