@@ -100,7 +100,7 @@ class ImageStore:
             kwargs['allCutoffModesNum'] = customCutoffMode
             self.imageName = self.imageName.replace( ".png", "" ).replace( ".CM" + str( customCutoffMode-1 ), "" ) + ".CM" + str( customCutoffMode ) + ".png"
             if customCutoffMode < 4:
-                ImageStore( self.imageName, printProgress = False ).write( input, **kwargs )
+                ImageStore( self.imageName ).write( input, **kwargs )
             else:
                 customCutoffMode = 4
        
@@ -203,8 +203,6 @@ class ImageStore:
                                     storedCutoffMode = int( currentImageData[0][0] )
                                     storedValidPixels = currentImageData[0][1]
                                     storedImageURL = currentImageData[1]
-                                    storedHigherThan128 = currentImageData[2][0]
-                                    storedLowerThan128 = currentImageData[2][1]
                                     successfulRead = True
                                     
                                 except:
@@ -287,16 +285,14 @@ class ImageStore:
             
             if returnCustomImageInfo == False:
                 if self.printProgress == True:
-                    print "Checking image has enough pixels to store the input data. This may take a while on larger images."
+                    print "Checking image has enough pixels to store the input data. This will take a while."
             
             bitsPerPixel = 1
             
             #Get correct range
             cutoffModeAmount = {}
             colourRange = {}
-            cutoffModes = [0,1,2,3,4]
-            higherThan128 = 0
-            lowerThan128 = 0
+            cutoffModes = range( 8 )
             
             for i in cutoffModes:
                 cutoffModeAmount[i] = 0
@@ -306,15 +302,21 @@ class ImageStore:
                 
                 #Calculate max data that can be stored
                 totalPixelCount = 0
+                imageDimensions = customImageInput.size
+                imageSize = float( imageDimensions[0]*imageDimensions[1] )
+                pixelCount = 0
+                
+                nextTime = time()+1
                 for pixels in customImageInput.getdata():
+                    
+                    #Output progress
+                    if self.printProgress == True:
+                        pixelCount += 1
+                        if pixelCount % 131072 == 0:
+                            print str( round( 100 * pixelCount / imageSize, 1 ) ) + "% completed."
+                
                     for rgb in range( 3 ):
                         rawData.append( pixels[rgb] )
-                        
-                        #Count how many higher and lower than 128
-                        if pixels[rgb] < 128:
-                            lowerThan128 += 1
-                        elif pixels[rgb] > 128:
-                            higherThan128 += 1
                         
                         #Count all valid values to find best cutoff mode
                         if totalPixelCount > 0:
@@ -345,6 +347,7 @@ class ImageStore:
             
                 if self.printProgress == True:
                     print "File information read from cache."
+                    
                 #Store custom image information
                 for pixels in customImageInput.getdata():
                     for rgb in range( 3 ):
@@ -355,8 +358,6 @@ class ImageStore:
                 if customCutoffMode != None:
                     cutoffMode = customCutoffMode
                 validPixels = storedValidPixels
-                higherThan128 = storedHigherThan128
-                lowerThan128 = storedLowerThan128
             
             validPixelsTotal = [number*bits for number, bits in validPixels.iteritems()]
             bitsPerPixelMax = validPixelsTotal.index( max( validPixelsTotal ) )+1
@@ -391,7 +392,7 @@ class ImageStore:
             #while validPixels[bitsPerPixel]/8*bitsPerPixel < bytesNeeded:
             while validPixels[bitsPerPixel] < bytesNeeded:
             
-                if bitsPerPixel >= 8:
+                if bitsPerPixel > 7:
                     if self.printProgress == True:
                         print "Error: Image not big enough to store data. Disabling the custom image option."
                     useBinary = False
@@ -404,7 +405,7 @@ class ImageStore:
             
             #Write to ini file
             if writeToINI == True:
-                textFileData[imageMD5] = [[cutoffMode,validPixels], customImageInputPath, [higherThan128, lowerThan128]]
+                textFileData[imageMD5] = [[cutoffMode,validPixels], customImageInputPath]
                 textFile.write( self.encodeData( textFileData, encode = True ) )
                 textFile.close()
             
