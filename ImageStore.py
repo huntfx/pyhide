@@ -1,4 +1,5 @@
 from PIL import Image
+from random import randint
 import cPickle
 import base64
 
@@ -6,16 +7,20 @@ class ImageStore:
 
     def __init__( self, imageName="ImageDataStore" ):
         self.imageDataPadding = [116, 64, 84, 123, 93, 73, 106]
-        self.imageName = imageName
+        self.imageName = str( imageName )
+        if self.imageName[:-1] == ":":
+            self.imageName += "/"
+        if self.imageName[:-1] == "/" or self.imageName[:-1] == "\\":
+            self.imageName += "ImageDataStore"
 
     def __repr__( self ):
         return "Use this to store or read data from an image.\nUsage:\n - ImageStore().write(input), ImageStore().read()\nYou can also define the name and location of the image.\n - ImageStore( 'C:\filename )'"
     
-    def write( self, input, widthRatio=0.52 ):
+    def write( self, input, ratioWidth=0.52 ):
         
         encodedData = base64.b64encode( cPickle.dumps( input ) )
         pixelData = [int( format( ord( letter ) ) ) for letter in encodedData]
-        pixelData += imageDataPadding
+        pixelData += self.imageDataPadding
         #Pad to end with multiple of 3
         for i in range( 3-len( pixelData ) ):
             rawData += [255]
@@ -33,10 +38,10 @@ class ImageStore:
         else:
             #Calculate based on ratio
             width = int( round( pow( currentPixels, ratioWidth ), -1 ) )
-            #Make sure it is divisable by 3
+            #Make sure it is divisible by 3
             width /= 3
             width *= 3
-            height = int( round( pow( width, 1/( 1/( 1-ratioWidth )-1 ) ), -1 ) )
+            height = int( round( pow( width, 1/( 1/( 1-ratioWidth )-1 ) ), -1 ) )+10
                 
         #Draw image
         imageOutput = Image.new("RGB", ( width, height ) )
@@ -51,20 +56,20 @@ class ImageStore:
                     dataG = pixelData[currentProgress+1]
                     dataB = pixelData[currentProgress+2]
                 except:
-                    dataR = rd.randint( 52, 128 )
-                    dataG = rd.randint( 52, 128 )
-                    dataB = rd.randint( 52, 128 )
+                    dataR = randint( 52, 128 )
+                    dataG = randint( 52, 128 )
+                    dataB = randint( 52, 128 )
                 imageData[x,y] = ( dataR, dataG, dataB )
         
         #Save image
-        imageOutput.save( str( self.imageName ) + ".png", "PNG" )
-        return "Saved file: " + str( self.imageName ) + ".png"
+        imageOutput.save( self.imageName + ".png", "PNG" )
+        return "Saved file: " + self.imageName + ".png"
 
     def read( self ):
-        
+    
         #Read image
         try:
-            imageInput = Image.open( str( self.imageName ) + ".png" )
+            imageInput = Image.open( self.imageName + ".png" )
         except:
             return "No image found."
         
@@ -79,17 +84,17 @@ class ImageStore:
         try:
             for i in range( len( rawData ) ):
                 j = 0
-                while rawData[i+j] == imageDataPadding[j]:
+                while rawData[i+j] == self.imageDataPadding[j]:
                     j += 1
-                    if j == len( imageDataPadding ):
+                    if j == len( self.imageDataPadding ):
                         rawData = rawData[0:i]
                         break
-                if j == len( imageDataPadding ):
+                if j == len( self.imageDataPadding ):
                     break
         except:
             print "File is probably corrupted."
         
-        #Decode data    
+        #Decode data
         encodedData = "".join( [chr( pixel ) for pixel in rawData] )
         outputData = cPickle.loads( base64.b64decode( encodedData ) )
         
