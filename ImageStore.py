@@ -1,7 +1,7 @@
 '''
 Author: Peter Hunt
 Website: peterhuntvfx.co.uk
-Version: 3 (22/12/2014)
+Version: 3.1
 '''
 from PIL import Image
 from random import randint
@@ -11,10 +11,7 @@ from datetime import datetime
 import cPickle, base64, urllib, cStringIO, os, pyimgur, webbrowser, zipfile, getpass, zlib, operator, re, math, md5, requests
 
 class ImageStore:
-    
-    #Setting to false will disable all printing, but you won't see errors
-    printProgress = True
-    
+        
     pythonDirectory = os.getcwd().replace( "\\", "/" )
     userDirectory = os.path.expanduser( "~" ).replace( "\\", "/" )
     
@@ -28,7 +25,7 @@ class ImageStore:
     
     versionNumber = 0.3
     
-    def __init__( self, imageName=defaultImageName ):
+    def __init__( self, imageName=defaultImageName, **kwargs ):
     
         self.imageDataPadding = [116, 64, 84, 123, 93, 73, 106]
         self.imageName = str( imageName ).replace( "\\", "/" ).rsplit( '.', 1 )[0] + ".png"
@@ -41,6 +38,8 @@ class ImageStore:
             
         if self.imageName[-1:] == "/":
             self.imageName += self.defaultImageName
+        
+        self.printProgress = checkInputs.checkBooleanKwargs( kwargs, True, 'p', 'print', 'printProgress', 'printOutput' )
         
     def write( self, input, **kwargs ):
                 
@@ -92,7 +91,7 @@ class ImageStore:
                 customCutoffMode = None
        
         #If image should be output with all cutoff modes
-        allCutoffModes = checkInputs.checkBooleanKwargs( kwargs, False, 'aCM', 'allCutoff', 'allCutoffs', 'allCutoffMode', 'allCutoffModes' )
+        allCutoffModes = checkInputs.checkBooleanKwargs( kwargs, False, 'a', 'all', 'aCM', 'allCutoff', 'allCutoffs', 'allModes', 'allCutoffMode', 'allCutoffModes' )
         if allCutoffModes == True:
             try:
                 customCutoffMode = kwargs['allCutoffModesNum'] + 1
@@ -101,7 +100,7 @@ class ImageStore:
             kwargs['allCutoffModesNum'] = customCutoffMode
             self.imageName = self.imageName.replace( ".png", "" ).replace( ".CM" + str( customCutoffMode-1 ), "" ) + ".CM" + str( customCutoffMode ) + ".png"
             if customCutoffMode < 4:
-                ImageStore( self.imageName ).write( input, **kwargs )
+                ImageStore( self.imageName, printProgress = False ).write( input, **kwargs )
             else:
                 customCutoffMode = 4
        
@@ -361,7 +360,7 @@ class ImageStore:
             
             validPixelsTotal = [number*bits for number, bits in validPixels.iteritems()]
             bitsPerPixelMax = validPixelsTotal.index( max( validPixelsTotal ) )+1
-            print cutoffMode
+            
             #Get maximum bytes per bits
             imageBytes = validPixels[ bitsPerPixelMax ]
             if self.printProgress == True:
@@ -959,6 +958,21 @@ class ImageStore:
     def validRange( self, cutoffMode, bitsPerColour ):
         
         cutoffRange = pow( 2, bitsPerColour )
+        
+        # 0 = 0 (0)
+        # 1 = 3 (64)
+        # 2 = 1 (128)
+        # 3 = 4 (192)
+        # 4 = 2 (255)
+        colourMinIncrease = 0
+        colourMaxIncrease = cutoffMode*64-cutoffRange-1
+        colourMaxReduce = 255
+        colourMinReduce = cutoffMode*64+cutoffRange
+        
+        colourIncreaseRange = range( colourMinIncrease, colourMaxIncrease+1 )
+        colourReduceRange = range( colourMinReduce, colourMaxReduce+1 )
+        
+        return colourIncreaseRange, colourReduceRange
         
         if cutoffMode == 0:
             colourMinIncrease = 0
