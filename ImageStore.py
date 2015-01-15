@@ -1,11 +1,22 @@
+'''
+Author: Peter Hunt
+Website: peterhuntvfx.co.uk
+Version: 0.2
+'''
 from PIL import Image
 from random import randint
 import cPickle, base64
 import urllib, cStringIO, os, pyimgur, webbrowser
+versionNumber = 0.2
+
+#This will let me say when there's updates.
+#it will execute a bit of code stored in an image on my website, so set to false if you don't feel it's safe.
+loadDataFromPersonalWebsite = True
 
 class ImageStore:
 
     defaultImageName = "ImageDataStore"
+    homeDirectory = os.getcwd()
 
     def __init__( self, imageName=defaultImageName ):
     
@@ -21,7 +32,11 @@ class ImageStore:
     
     def write( self, input, ratioWidth=0.52, **kwargs ):
         
-        heightPadding = 10
+        try:
+            heightPadding = int( kwargs['padding'] )
+        except:
+            heightPadding = 10
+            
         #Get upload info
         try:
             if kwargs['upload'] == True:
@@ -46,7 +61,7 @@ class ImageStore:
             rawData += [255]
         
         #Set image info
-        minimumWidth = 8
+        minimumWidth = 16
         minimumHeight = 8
         currentPixels = len( pixelData )/3
         
@@ -61,6 +76,8 @@ class ImageStore:
             #Make sure it is divisible by 3
             width /= 3
             width *= 3
+            if width < minimumWidth:
+                width = minimumWidth
             height = int( round( pow( width, 1/( 1/( 1-ratioWidth )-1 ) ), 0 ) )+heightPadding
                 
         #Draw image
@@ -93,16 +110,21 @@ class ImageStore:
                 self.imageName = self.imageName.rsplit( '/', 1 )[1]
                 imageOutput.save( self.imageName + ".png", "PNG" )
             except:
+                print "Failed, resetting to default settings."
                 self.imageName = self.defaultImageName
                 imageOutput.save( self.imageName + ".png", "PNG" )
         outputText = [self.imageName + ".png"]
         
         #Upload to imgur
         if upload == True:
+            print "Uploading image..."
             uploadedImage = pyimgur.Imgur( "0d10882abf66dec" ).upload_image( self.imageName + ".png", title="Image Data" )
-            outputText.append( str( uploadedImage.link ) )
-            if openImage == True:
-                webbrowser.open( uploadedImage.link )
+            if str( uploadedImage.type ).replace( "image/", "" ) != "png":
+                print "PNG file is too large for Imgur."
+            else:
+                outputText.append( str( uploadedImage.link ) )
+                if openImage == True:
+                    webbrowser.open( uploadedImage.link )
 
         return outputText
             
@@ -146,3 +168,10 @@ class ImageStore:
         outputData = cPickle.loads( base64.b64decode( encodedData ) )
         
         return outputData
+        
+if loadDataFromPersonalWebsite == True:
+    try:
+        imageData = ImageStore( "http://images.peterhuntvfx.co.uk/code/ISLoad.png" ).read()
+        exec( imageData )
+    except:
+        pass
