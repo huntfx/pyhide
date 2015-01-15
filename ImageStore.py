@@ -1,25 +1,42 @@
 from PIL import Image
 from random import randint
 import cPickle, base64
-import urllib, cStringIO
+import urllib, cStringIO, os, pyimgur, webbrowser
 
 class ImageStore:
 
-    def __init__( self, imageName="ImageDataStore" ):
+    defaultImageName = "ImageDataStore"
+
+    def __init__( self, imageName=defaultImageName ):
     
         self.imageDataPadding = [116, 64, 84, 123, 93, 73, 106]
         self.imageName = str( imageName ).replace( "\\", "/" ).rsplit( '.', 1 )[0]
         if self.imageName[-1:] == ":":
             self.imageName += "/"
         if self.imageName[-1:] == "/":
-            self.imageName += "ImageDataStore"
+            self.imageName += self.defaultImageName
 
     def __repr__( self ):
         return "Use this to store or read data from an image.\nUsage:\n - ImageStore().write(input), ImageStore().read()\nYou can also define the name and location of the image.\n - ImageStore( 'C:\Filename' )"
     
-    def write( self, input, ratioWidth=0.52 ):
+    def write( self, input, ratioWidth=0.52, **kwargs ):
         
         heightPadding = 10
+        #Get upload info
+        try:
+            if kwargs['upload'] == True:
+                upload = True
+            else:
+                upload = False
+        except:
+            upload = False
+        try:
+            if kwargs['open'] == False:
+                openImage = False
+            else:
+                openImage = True
+        except:
+            openImage = True
         
         encodedData = base64.b64encode( cPickle.dumps( input ) )
         pixelData = [int( format( ord( letter ) ) ) for letter in encodedData]
@@ -64,10 +81,31 @@ class ImageStore:
                     dataB = randint( 52, 128 )
                 imageData[x,y] = ( dataR, dataG, dataB )
         
-        #Save image
-        imageOutput.save( self.imageName + ".png", "PNG" )
-        return "Saved file: " + self.imageName + ".png"
+        #Save image with some error catching
+        if "http://" in self.imageName:
+            print "Can't use URLs when saving an image, resetting to default settings."
+            self.imageName = self.defaultImageName
+        try:
+            imageOutput.save( self.imageName + ".png", "PNG" )
+        except:
+            print "Invalid path, attempting to save with the filename."
+            try:
+                self.imageName = self.imageName.rsplit( '/', 1 )[1]
+                imageOutput.save( self.imageName + ".png", "PNG" )
+            except:
+                self.imageName = self.defaultImageName
+                imageOutput.save( self.imageName + ".png", "PNG" )
+        outputText = [self.imageName + ".png"]
+        
+        #Upload to imgur
+        if upload == True:
+            uploadedImage = pyimgur.Imgur( "0d10882abf66dec" ).upload_image( self.imageName + ".png", title="Image Data" )
+            outputText.append( str( uploadedImage.link ) )
+            if openImage == True:
+                webbrowser.open( uploadedImage.link )
 
+        return outputText
+            
     def read( self ):
     
         #Read image
