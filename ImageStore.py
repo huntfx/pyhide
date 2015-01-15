@@ -959,10 +959,17 @@ class ImageStore:
         
         cutoffRange = pow( 2, bitsPerColour )
         
-        colourMinIncrease = 0
-        colourMaxIncrease = cutoffMode*64-cutoffRange-1
-        colourMaxReduce = 255
-        colourMinReduce = cutoffMode*64+cutoffRange
+        if cutoffMode < 5:
+            colourMinIncrease = 0
+            colourMaxIncrease = cutoffMode*64-cutoffRange-1
+            colourMaxReduce = 255
+            colourMinReduce = cutoffMode*64+cutoffRange
+        else:
+            cutoffMode -= 4
+            colourMinIncrease = cutoffMode*64
+            colourMaxIncrease = 255-cutoffRange
+            colourMinReduce = cutoffRange
+            colourMaxReduce = cutoffMode*64-1
         
         colourIncreaseRange = range( colourMinIncrease, colourMaxIncrease+1 )
         colourReduceRange = range( colourMinReduce, colourMaxReduce+1 )
