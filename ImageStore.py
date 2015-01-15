@@ -20,7 +20,7 @@ class ImageStore:
     defaultImageName = "ImageDataStore.png"
     pythonDirectory = os.getcwd()
     userDirectory = os.path.expanduser( "~" )
-    defaultDirectory = pythonDirectory
+    defaultDirectory = userDirectory
 
     def __init__( self, imageName=defaultImageName ):
     
@@ -46,7 +46,7 @@ class ImageStore:
     #It'll write the original imagine to the file, and the difference between the two will contain the data
     #Writing the image will be optional, but if disabled you will need to provide the original image separately
     #If anyone has a better suggestion I'd be happy to hear it
-    def writeZip( self ):
+    def writeZip( self, disableInfo = False ):
     
         #Define the text
         infoText = ["Date created: " + str( self.outputTime( time() ) )]
@@ -64,7 +64,9 @@ class ImageStore:
         try:
             zip.writestr( 'infomation.txt', "".join( infoText ) )
             zip.writestr( 'version', str( versionNumber ) )
-            zip.writestr( 'creation', str( getpass.getuser() ) + "@" + str( time() ) )
+            zip.writestr( 'creationtime', str( getpass.getuser() ) + "@" + str( time() ) )
+            if disableInfo == True:
+                zip.writestr( 'disable', "" )
         finally:
             zip.close()
         
@@ -90,17 +92,22 @@ class ImageStore:
         #Read zip data
         if zip != None:
             nameList = zip.namelist()
-            if 'version' in nameList:
-                versionNumber = zip.read( 'version' )
+            if 'disable' not in nameList:
+                if 'version' in nameList:
+                    versionNumber = zip.read( 'version' )
+                else:
+                    versionNumber = "pre-2.0"
+                if 'creationtime' in nameList:
+                    creation = zip.read( 'creationtime' )
+                else:
+                    creation = None
+                if creation != None:
+                    creationName = creation.split( "@" )[0]
+                    creationTime = creation.split( "@" )[1]
             else:
-                versionNumber = "pre-2.0"
-            if 'creation' in nameList:
-                creation = zip.read( 'creation' )
-            else:
-                creation = None
-            if creation != None:
-                creationName = creation.split( "@" )[0]
-                creationTime = creation.split( "@" )[1]
+                versionNumber = None
+                creationName = None
+                creationTime = None
         
         else:
             versionNumber = "pre-2.0"
@@ -139,7 +146,15 @@ class ImageStore:
             if 0 < float( str( kwargs['ratio'] ) ) < 1:
                 ratioWidth = float( str( kwargs['ratio'] ) )
         except:
-            ratioWidth=0.52        
+            ratioWidth=0.52  
+        #Get disable info
+        try:
+            if kwargs['disableInfo'] == True:
+                disableInfo = True
+            else:
+                disableInfo = False
+        except:
+            disableInfo = False     
         
         encodedData = base64.b64encode( cPickle.dumps( input ) )
         pixelData = [int( format( ord( letter ) ) ) for letter in encodedData]
@@ -232,7 +247,7 @@ class ImageStore:
         #Make sure image exists first
         if self.imageName != None:
         
-            self.writeZip()
+            self.writeZip( disableInfo )
             
             #Upload to imgur
             if upload == True:
@@ -249,7 +264,16 @@ class ImageStore:
             
         return outputText
             
-    def read( self ):
+    def read( self, **kwargs ):
+    
+        #Get output version info
+        try:
+            if kwargs['output'] == True:
+                outputVersion = True
+            else:
+                outputVersion = False
+        except:
+            outputVersion = False
     
         #Read image
         if "http://" in self.imageName:
@@ -265,10 +289,12 @@ class ImageStore:
                 return "No image found."
      
         #Get some custom data
-        originalVersionNumber, originalCreationTime, originalCreationName = self.readZip()
-        print "Version number: " + str( originalVersionNumber )
-        if originalCreationTime != None:
-            print "Date created: " + str( self.outputTime( originalCreationTime ) )
+        if outputVersion == True:
+            originalVersionNumber, originalCreationTime, originalCreationName = self.readZip()
+            if originalVersionNumber != None:
+                print "Version number: " + str( originalVersionNumber )
+            if originalCreationTime != None:
+                print "Date created: " + str( self.outputTime( originalCreationTime ) )
         
         #Store pixel info
         rawData = []
