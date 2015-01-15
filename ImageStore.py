@@ -8,7 +8,7 @@ from random import randint
 from subprocess import call
 from time import time
 from datetime import datetime
-import cPickle, base64, urllib, cStringIO, os, pyimgur, webbrowser, zipfile, getpass
+import cPickle, base64, urllib, cStringIO, os, pyimgur, webbrowser, zipfile, getpass, zlib
 versionNumber = '0.2.1'
 
 #This will let it check for any updates.
@@ -43,11 +43,13 @@ class ImageStore:
         return "".join( returnText )
     
     #This is just temporary, eventually I'll try use this to allow custom images
+    #It'll write the original imagine to the file, and the difference between the two will contain the data
+    #Writing the image will be optional, but if disabled you will need to provide the original image separately
+    #If anyone has a better suggestion I'd be happy to hear it
     def writeZip( self ):
     
         #Define the text
-        timeOfCreation = datetime.fromtimestamp( time() ).strftime( '%d/%m/%Y %H:%M' )
-        infoText = ["Date created: " + timeOfCreation]
+        infoText = ["Date created: " + str( self.outputTime( time() ) )]
         try:
             infoText = ["Username: " + str( getpass.getuser() ) + "\r\n"] + infoText
         finally:
@@ -78,9 +80,8 @@ class ImageStore:
         
         #Read if zip file
         if "http://" in self.imageName:
-            imageIO = cStringIO.StringIO( urllib.urlopen( self.imageName ).read() )
-            if zipfile.is_zipfile( imageIO ) == True:
-                zip = zipfile.ZipFile( imageIO )
+            if zipfile.is_zipfile( self.imageURL ) == True:
+                zip = zipfile.ZipFile( self.imageURL )
         elif zipfile.is_zipfile( self.imageName ) == True:
             zip = zipfile.ZipFile( self.imageName )
         else:
@@ -92,7 +93,7 @@ class ImageStore:
             if 'version' in nameList:
                 versionNumber = zip.read( 'version' )
             else:
-                versionNumber = "1.0"
+                versionNumber = "pre-2.0"
             if 'creation' in nameList:
                 creation = zip.read( 'creation' )
             else:
@@ -101,12 +102,16 @@ class ImageStore:
                 creationName = creation.split( "@" )[0]
                 creationTime = creation.split( "@" )[1]
         
-            return [versionNumber, creationTime, creationName]
-        
         else:
-            return None
+            versionNumber = "pre-2.0"
+            creationName = None
+            creationTime = None
+        
+        return [versionNumber, creationTime, creationName]
                 
-    
+    def outputTime( self, timeInt ):
+        return datetime.fromtimestamp( float( timeInt ) ).strftime( '%d/%m/%Y %H:%M' )
+        
     def write( self, input, **kwargs ):
         
         #Get height padding info
@@ -241,6 +246,7 @@ class ImageStore:
                         webbrowser.open( uploadedImage.link )
         else:
             print failText
+            
         return outputText
             
     def read( self ):
@@ -248,7 +254,8 @@ class ImageStore:
         #Read image
         if "http://" in self.imageName:
             try:
-                imageInput = Image.open( cStringIO.StringIO( urllib.urlopen( self.imageName ).read() ) )
+                self.imageURL = cStringIO.StringIO( urllib.urlopen( self.imageName ).read() )
+                imageInput = Image.open( self.imageURL )
             except:
                 return "No image found."
         else:
@@ -257,7 +264,11 @@ class ImageStore:
             except:
                 return "No image found."
      
+        #Get some custom data
         originalVersionNumber, originalCreationTime, originalCreationName = self.readZip()
+        print "Version number: " + str( originalVersionNumber )
+        if originalCreationTime != None:
+            print "Date created: " + str( self.outputTime( originalCreationTime ) )
         
         #Store pixel info
         rawData = []
