@@ -32,10 +32,13 @@ class ImageStore:
     
         self.imageDataPadding = [116, 64, 84, 123, 93, 73, 106]
         self.imageName = str( imageName ).replace( "\\", "/" ).rsplit( '.', 1 )[0] + ".png"
+        
         if "/" not in self.imageName:
             self.imageName = self.defaultImageDirectory + "/" + self.imageName
+            
         if self.imageName[-1:] == ":":
             self.imageName += "/"
+            
         if self.imageName[-1:] == "/":
             self.imageName += self.defaultImageName
         
@@ -67,36 +70,47 @@ class ImageStore:
         #Ratio of width to height
         validArgs = checkInputs.validKwargs( kwargs, 'r', 'ratio', 'sizeRatio', 'widthRatio', 'heightRatio', 'widthToHeightRatio' )
         ratioWidth = math.log( 1920 ) / math.log( 1920*1080 )
+        
         for i in range( len( validArgs ) ):
+        
             try:
                 if 0 < float( str( kwargs[validArgs[i]] ) ) < 1:
                     ratioWidth = float( str( kwargs[validArgs[i]] ) )
                     break
+                    
                 else:
                     True/False
+                    
             except:
                 ratioWidth = math.log( 1920 ) / math.log( 1920*1080 )
         
         if outputSize == False:
+        
             #Check if custom image should be used
             validArgs = checkInputs.validKwargs( kwargs, 'i', 'cI', 'img', 'image', 'URL', 'imgURL', 'imgPath', 'imgLoc', 'imgLocation', 'imageURL', 'imageLoc', 'imagePath', 'imageLocation', 'customImg', 'customURL', 'customImage', 'customImgURL', 'customImageURL', 'customImgPath', 'customImagePath', 'customImgLoc', 'customImageLoc', 'customImgLocation', 'customImageLocation' )
             customImageInput = None
             customImageInputPath = ""
+            
             for i in range( len( validArgs ) ):
+            
                 try:
                     customImageInput = self.readImage( kwargs[validArgs[i]] )
                     if customImageInput != None:
                         customImageInputPath = kwargs[validArgs[i]]
                         break
+                        
                 except:
                     customImageInput = None
+                    
             if len( validArgs ) > 0 and customImageInput == None:
                 if self.printProgress == True:
                     print "Error: Custom image could not be read. Output image will be saved without it."
+                    
             if customImageInput == None:
                 useBinary = False
             else:
                 useBinary = True
+                
                 sizeOfImage = customImageInput.size
                 #Keep same size ratio if image can't hold all the data
                 ratioWidth = math.log( sizeOfImage[0] ) / math.log( sizeOfImage[0]*sizeOfImage[1] )
@@ -105,17 +119,21 @@ class ImageStore:
             validArgs = checkInputs.validKwargs( kwargs, 't', 'tI', 'tCI', 'testImage', 'testURL', 'testImageURL', 'testImageLocation', 'testCustomImage', 'testCustomImageURL', 'testCustomImageLocation' )
             canReadCustomImage = False
             for i in range( len( validArgs ) ):
+            
                 try:
                     if kwargs[validArgs[i]] == True:
                         if customImageInput == None:
                             return False
                         else:
                             return True
+                            
                     canReadCustomImage = self.readImage( kwargs[validArgs[i]] )
                     if canReadCustomImage != None:
                         return True
+                        
                 except:
                     canReadCustomImage = False
+                    
             if len( validArgs ) > 0 and canReadCustomImage == False:
                 return False
             
@@ -132,10 +150,13 @@ class ImageStore:
                 
                 #This part allows you to skip iterating through every single pixel 24 times
                 if writeToINI == True:
+                
                     if os.path.exists( self.defaultCacheDirectory + "/" + self.defaultCacheName ):
                         try:
+                        
                             textFile = open( self.defaultCacheDirectory + "/" + self.defaultCacheName, "r")
                             try:
+                            
                                 textFileData = self.decodeData( textFile.read(), decode = True )
                                 try:
                                     currentImageData = textFileData[imageMD5]
@@ -143,18 +164,22 @@ class ImageStore:
                                     storedValidPixels = currentImageData[0][1]
                                     storedImageURL = currentImageData[1]
                                     successfulRead = True
+                                    
                                 except:
                                     pass
                             except:
                                 pass
                             textFile.close()
+                            
                         except:
                             pass
+                            
                         textFile = open( self.defaultCacheDirectory + "/" + self.defaultCacheName, "r+")
                     else:
                         textFile = open( self.defaultCacheDirectory + "/" + self.defaultCacheName, "w")
+                        
                     storedImage = self.readImage( storedImageURL )
-                    
+                
                 if successfulRead == True and storedImage != None:
                     
                     customImageInputPath = storedImageURL
@@ -188,24 +213,25 @@ class ImageStore:
                                 if self.printProgress == True:
                                     print "Original image URL will not be stored within the image."
                                 customImageInputPath = ""
-                                
                     else:
                         customImageInputPath = ""
-        
         else:
             useBinary = False
             
-            
         #Fix for gif images
-        if customImageInputPath[-4:]:
-            print "Error: Can't use GIF images to write over, disabling the custom image."
+        if customImageInputPath[-4:].lower() == ".gif":
             customImageInput = None
             customImageInputPath = ""
             useBinary = False
+            
+            if self.printProgress == True:
+                print "Error: Can't use GIF images to write over, disabling the custom image."
+            
         
         #Print how large the input data is
         inputData = self.encodeData( input, binary = useBinary )
         lengthOfInputData = len( inputData )
+        
         if returnCustomImageInfo == False:
             if self.printProgress == True:
                 print "Input data is " + str( lengthOfInputData+3 ) + " bytes (" + str( ( lengthOfInputData+3 )/1024 ) + "kb)"
@@ -227,6 +253,7 @@ class ImageStore:
             cutoffModeAmount = {}
             colourRange = {}
             cutoffModes = [0,1,2]
+            
             for i in cutoffModes:
                 cutoffModeAmount[i] = 0
                 colourRange[i] = self.validRange( i, bitsPerPixel )
@@ -238,11 +265,14 @@ class ImageStore:
                 for pixels in customImageInput.getdata():
                     for rgb in range( 3 ):
                         rawData.append( pixels[rgb] )
+                        
                         #Count all valid values to find best cutoff mode
                         if totalPixelCount > 0:
                             for i in cutoffModes:
+                            
                                 if pixels[rgb] in colourRange[i][0] or pixels[rgb] in colourRange[i][1]:
                                     cutoffModeAmount[i] += 1
+                                    
                     totalPixelCount += 1
                 
                 #Select best cutoff mode
@@ -251,9 +281,11 @@ class ImageStore:
                 #Find maximum size image can store for bits per colour
                 validPixels = {}
                 for i in range( 8 ):
+                
                     bitsPerPixel = i+1
                     validPixels[bitsPerPixel] = 0
                     colourIncreaseRange, colourReduceRange = self.validRange( cutoffMode, bitsPerPixel )
+                    
                     for j in range( len( rawData ) ):
                         if rawData[j] in colourIncreaseRange or rawData[j] in colourReduceRange:
                             validPixels[bitsPerPixel] += 1
@@ -277,13 +309,17 @@ class ImageStore:
             imageBytes = validPixels[ bitsPerPixelMax ]
             if self.printProgress == True:
                 print "Image can store up to around " + str( imageBytes ) + " bytes (" + str( imageBytes/1024 ) + "kb)"
+            
             inputBytes = ( len(inputData )*8 )/bitsPerPixelMax+3
             outputText = "Input data at this level is " + str( inputBytes ) + " bytes (" + str( inputBytes/1024 ) + "kb)"
+            
             if inputBytes > imageBytes:
                 outputText += ", which is currently more than the image can hold."
                 outputText += "\nAttempting to find a valid value by calculating the other levels."
+                
             else:
                 outputText += ", now attempting to find the minumum valid value to store the data."
+                
             if self.printProgress == True:
                 print outputText
             
@@ -298,12 +334,15 @@ class ImageStore:
             
             #while validPixels[bitsPerPixel]/8*bitsPerPixel < bytesNeeded:
             while validPixels[bitsPerPixel] < bytesNeeded:
+            
                 if bitsPerPixel >= 8:
                     if self.printProgress == True:
                         print "Error: Image not big enough to store data. Disabling the custom image option."
                     useBinary = False
                     inputData = self.encodeData( input, binary = useBinary )
+                    
                     break
+                    
                 bitsPerPixel += 1
                 bytesNeeded = ( lengthOfInputData*8 )/bitsPerPixel+3
             
@@ -370,14 +409,19 @@ class ImageStore:
         #Set range of colours for random filling
         numbersToAddIncrement = 0
         if padWithRandomData == True:
+        
             if useBinary == True:
                 maxImageAddition = 2**bitsPerPixel+bitsPerPixel-8
+                minImageAddition = 0
+                
+                #Fix for if it goes under 1
                 if maxImageAddition < 1:
                     maxImageAddition = 2**bitsPerPixel
-                minImageAddition = 0
+                
             else:
                 maxImageAddition = 128
                 minImageAddition = 52
+                
         else:
             maxImageAddition = 0
             minImageAddition = 0
@@ -396,7 +440,7 @@ class ImageStore:
                     if debugData == True:
                         dataRGB = [99,99,99]
                 
-                #If a greyscale noise image should be made
+                #If an image should be made with the default method
                 elif useBinary == False:
                         
                     dataRGB = {} 
@@ -451,8 +495,10 @@ class ImageStore:
             if self.printProgress == True:
                 print "Error: Can't use URLs when saving an image, resetting to default settings."
             self.imageName = self.defaultImageName
+            
         try:
             imageOutput.save( self.imageName, "PNG" )
+            
         except:
             failText = ["Error: Failed saving file to " + self.imageName + "."]
             failText.append( "You may have incorrect permissions or the file may be in use." )
@@ -463,28 +509,37 @@ class ImageStore:
             
             #If already in default directory
             if self.imageName.rsplit( '/', 1 )[0] == self.defaultImageDirectory:
+            
                 if self.imageName.rsplit( '/', 1 )[1] == self.defaultImageName:
                     self.imageName = None
                     failText = savingFailed
+                    
                 else:
+                
                     try:
                         self.imageName = self.defaultImageDirectory + "/" + self.defaultImageName
                         imageOutput.save( self.imageName, "PNG" )
                         failText = None
+                        
                     except:
                         self.imageName = None
                         failText = savingFailed
+                        
             #If not in default directory
             else:
+            
                 try:
                     self.imageName = self.defaultImageDirectory + "/" + self.imageName.rsplit( '/', 1 )[1]
                     imageOutput.save( self.imageName, "PNG" )
                     failText = None
+                    
                 except:
+                
                     try:
                         self.imageName = self.defaultImageDirectory + "/" + self.defaultImageName
                         imageOutput.save( self.imageName, "PNG" )
                         failText = None
+                        
                     except:
                         failText = savingFailed
                         self.imageName = None
@@ -506,6 +561,8 @@ class ImageStore:
             except:
                 pass
             infoText.append( "\r\nVisit http://peterhuntvfx.co.uk to get a working version of the code." )
+            
+            #Write to zip file
             ImageStoreZip.write( "".join( infoText ), "information.txt", reset = True )
             ImageStoreZip.write( str( self.versionNumber ), "version" )
             ImageStoreZip.write( str( getpass.getuser() ) + "@" + str( time() ), "creationtime" )
@@ -514,10 +571,12 @@ class ImageStore:
             if disableInfo == True:
                 ImageStoreZip.write( "", "disable" )
             zipSuccess = ImageStoreZip.combine( image = self.imageName )
+            
             if zipSuccess == False:
                 if self.printProgress == True:
                     print "Error: Unable to write extra information."
-                    
+            
+            #Upload image
             if upload == True:
                 if self.printProgress == True:
                     print "Uploading image..."
@@ -541,6 +600,7 @@ class ImageStore:
             #Save if from a URL
             saved = False
             if "http://" in imageLocation or "https://" in imageLocation:
+            
                 try:
                     inputImage = Image.open( cStringIO.StringIO( urllib.urlopen( imageLocation ).read() ) )
                     imageFormat = inputImage.format
@@ -548,17 +608,21 @@ class ImageStore:
                     inputImage.save( imageSaveLocation, imageFormat ) 
                     imageLocation = imageSaveLocation
                     saved = True
+                    
                 except:
                     pass
                 
             #Upload image
             try:
                 uploadedImage = pyimgur.Imgur( "0d10882abf66dec" ).upload_image( imageLocation, title="Image Data" )
+            
             except:
                 if self.printProgress == True:
                     print "Error: Failed uploading image, trying once more."
+                    
                 try:
                     uploadedImage = pyimgur.Imgur( "0d10882abf66dec" ).upload_image( imageLocation, title="Image Data" )
+                
                 except:
                     if self.printProgress == True:
                         print "Failed to upload image."
@@ -570,11 +634,13 @@ class ImageStore:
             
             #Check it's not been converted, not needed if it's acting as the original image
             if originalImageSize != uploadedImageSize and ignoreSize == False:
+            
                 if self.printProgress == True:
                     print "Error: File is too large for imgur."
                 return None
                 
             else:
+            
                 #Open image in browser
                 if openImage == True:
                     webbrowser.open( uploadedImage.link )
@@ -582,8 +648,10 @@ class ImageStore:
                 return uploadedImage.link
 
             if saved == True:
+            
                 try:
                     os.remove( imageSaveLocation )
+                    
                 except:
                     pass
                 
@@ -605,6 +673,7 @@ class ImageStore:
         except:
             outputInfo = False
             customImageURL = ""
+            
         if outputInfo == True:
             if originalVersionNumber != None:
                 print "Version number: " + str( originalVersionNumber )
@@ -639,6 +708,7 @@ class ImageStore:
             
         usedDifferentOriginalImage = False
         if useBinary == True:
+        
             #Store pixel info
             imageInput = self.readImage( self.imageName )
             rawData = []
@@ -663,6 +733,7 @@ class ImageStore:
                     originalImage = None
             
             if len( validArgs ) > 0 and originalImage == None:
+            
                 if self.printProgress == True:
                     outputText = "Error: Could not read the custom input image"
                     if len( customImageURL ) > 0:
@@ -670,6 +741,7 @@ class ImageStore:
                     else:
                         outputText += "."
                     print outputText
+                    
                 originalImage = self.readImage( customImageURL )
                 
             elif originalImage == None:
@@ -698,16 +770,20 @@ class ImageStore:
             #Get difference in data
             comparisonData = []
             for i in range( 3, len( originalImageData ) ):
+            
                 if originalImageData[i] in colourIncreaseRange:
                     comparisonData.append( rawData[i] - originalImageData[i] )
+                    
                 elif originalImageData[i] in colourReduceRange:
                     comparisonData.append( originalImageData[i] - rawData[i] )
                     
             bitData = "".join( [ format( x, "b" ).zfill( bitsPerColour ) for x in comparisonData ] )
             byteData = re.findall( r".{1,8}", bitData )
+            
             for i in range( len( byteData ) ):
                 if "-" in byteData[i]:
                     byteData[i] = "00000000"
+                    
             numberData = [ int( number, 2 ) for number in byteData ]
             
         else:
@@ -715,45 +791,61 @@ class ImageStore:
     
         #Truncate end of file
         try:
+        
             for i in range( len( numberData ) ):
                 j = 0
+                
                 while numberData[i+j] == self.imageDataPadding[j]:
                     j += 1
+                    
                     if j == len( self.imageDataPadding ):
                         numberData = numberData[0:i]
                         break
+                        
                 if j == len( self.imageDataPadding ):
                     break
+                    
         except:
             if self.printProgress == True:
                 print "Error: File is corrupted."
                 
         try:
             decodedData = self.decodeData( numberData )
+            
         except:
             if self.printProgress == True:
+            
                 if usedDifferentOriginalImage == True:
                     print "Failed to decode data, the custom original image specified may not be the original one used."
+                    
                     if len( customImageURL ) > 0:
                         print "Failed to decode data, however here is a URL to the correct image contained within the file."
                         print "If you are using the original image, it may have just resized after being uploaded to Imgur."
+                    
                     else:
                         print "No URL was found stored in the image, you may have linked to the wrong image."
+                
                 elif len( customImageURL ) > 0:
                     print "Failed to decode data from the stored URL (" + str( customImageURL ) + "), check the image still exists."
+                
                 else:
                     print "Failed to decode data from the image."
+                    
             decodedData = None
         
         return decodedData
 
     def decodeData( self, numberData, **kwargs ):
         
+        #Only decode the data without converting numbers into characters
         if checkInputs.checkBooleanKwargs( kwargs, False, 'd', 'decode', 'decodeOnly' ) == True:
             encodedData = numberData
+        
+        #Convert numbers into characters
         else:
             encodedData = "".join( [chr( pixel ) for pixel in numberData] )
         outputData = cPickle.loads( base64.b64decode( encodedData ) )
+        
         return outputData
     
     def encodeData( self, input, **kwargs ):
@@ -781,21 +873,28 @@ class ImageStore:
     def dateFormat( self, input ):
         return datetime.fromtimestamp( float( input ) ).strftime( '%d/%m/%Y %H:%M' )
 
+    #Find if path/file exists
     def validPath( self, path, **kwargs ):
        
+        #This will truncate the final slash, to make sure the directory exists
         includeFile = checkInputs.checkBooleanKwargs( kwargs, False, 'f', 'iF', 'iI', 'file', 'image', 'include', 'isFile', 'isImage', 'includeFile', 'includeImage', 'includesFile', 'includesImage' )
        
         path = str( path )
-        if includeFile == True and "." in path.rsplit( '/', 1 )[1]:
-            path = path.rsplit( '/', 1 )[0]
-            
-        isValid = os.path.exists( path )
+        
+        #Check URL and local paths separately
         if "http://" in path or "https://" in path:
             try:
                 Image.open( cStringIO.StringIO( urllib.urlopen( path ).read() ) )
                 isValid = True
             except:
                 isValid = False
+                
+        else:
+            if includeFile == True and "." in path.rsplit( '/', 1 )[1]:
+                path = path.rsplit( '/', 1 )[0]
+                
+            isValid = os.path.exists( path )
+        
         
         return isValid
 
@@ -832,14 +931,19 @@ class ImageStore:
         location = str( location )
         
         if "http://" in location or "https://" in location:
+        
             try:
                 imageURL = cStringIO.StringIO( urllib.urlopen( location ).read() )
                 return Image.open( imageURL )
+                
             except:
                 return None
+                
         else:
+        
             try:
                 return Image.open( location )
+                
             except:
                 return None
 
@@ -888,40 +992,54 @@ class ImageStoreZip:
         #Get image location
         validArgs = checkInputs.validKwargs( kwargs, 'i', 'iL', 'iN', 'image', 'imageLoc', 'imageLocation', 'imageName' )
         imageLocation = None
+        
         for i in range( len( validArgs ) ):
+        
             try:
                 imageLocation = kwargs[validArgs[i]]
+                
                 if ImageStore().validPath( imageLocation ) == True:
                     break
                 else:
                     "Fail" + 0
+                    
             except:
                 imageLocation = None
                 
         #Read if zip file
         if "http://" in imageLocation or "https://" in imageLocation:
+        
             imageLocation = cStringIO.StringIO( urllib.urlopen( imageLocation ).read() )
+            
             if zipfile.is_zipfile( imageLocation ) == True:
                 zip = zipfile.ZipFile( imageLocation )
             else:
                 zip = None
+                
         elif zipfile.is_zipfile( imageLocation ) == True:
             zip = zipfile.ZipFile( imageLocation )
+            
         else:
             zip = None
             
         #Read zip data
         if zip != None:
             nameList = zip.namelist()
+            
             if 'disable' not in nameList:
+            
                 if 'version' in nameList:
                     versionNumber = zip.read( 'version' )
+                    
                 else:
                     versionNumber = "pre-2.0"
+                    
                 if 'creationtime' in nameList:
                     creation = zip.read( 'creationtime' )
+                    
                 else:
                     creation = None
+                    
                 if creation != None:
                     creationName = creation.split( "@" )[0]
                     creationTime = creation.split( "@" )[1]
@@ -956,13 +1074,16 @@ class ImageStoreZip:
         #Get image location
         validArgs = checkInputs.validKwargs( kwargs, 'i', 'iL', 'iN', 'image', 'imageLoc', 'imageLocation', 'imageName' )
         imageLocation = None
+        
         for i in range( len( validArgs ) ):
+        
             try:
                 imageLocation = kwargs[validArgs[i]]
                 if ImageStore().validPath( imageLocation ) == True:
                     break
                 else:
                     "Fail" + 0
+                    
             except:
                 imageLocation = None
         
@@ -970,16 +1091,19 @@ class ImageStoreZip:
         validArgs = checkInputs.validKwargs( kwargs, 'z', 'zL', 'zN', 'zip', 'zipLoc', 'zipLocation', 'zipName' )
         zipLocation = path
         for i in range( len( validArgs ) ):
+        
             try:
                 zipLocation = kwargs[validArgs[i]]
                 if ImageStore().validPath( zipLocation ) == True:
                     break
                 else:
                     "Fail" + 0
+                    
             except:
                 zipLocation = path
         
         if imageLocation != None:
+        
             locationOfImage = imageLocation.replace( "/", "\\\\" )
             locationOfZip = zipLocation.replace( "/", "\\\\" )
             
@@ -997,33 +1121,43 @@ class checkInputs:
     
     @classmethod
     def capitalLetterCombinations( self, input ):
+    
         #Find different upper and lower case combinations
         returnList = [input]
         if any( map( str.isupper, input ) ):
+        
             #If capital in text but not first letter
             if map( str.isupper, input[0] )[0] == False:
                 returnList.append( ''.join( word[0].upper() + word[1:] for word in input.split() ) )
                 returnList.append( input.capitalize() )
+                
             #If capital is anywhere in the name as well as also first letter
             elif any( map( str.isupper, input[1:] ) ):
                 returnList.append( input.capitalize() )
+                
             returnList.append( input.lower() )
+            
         else:
+        
             #If no capital letter is in at all
             returnList.append( ''.join( word[0].upper() + word[1:] for word in input.split() ) )
         return returnList         
     
     @classmethod
     def validKwargs( self, kwargs, *args ):
+    
         valid = []
+        
         for i in range( len( args ) ):
             newArgs = checkInputs.capitalLetterCombinations( args[i] )
             
             for value in newArgs:
+            
                 try:
                     kwargs[ value ]
                     if value not in valid:
                         valid.append( value )
+                        
                 except:
                     pass
                     
@@ -1034,6 +1168,7 @@ class checkInputs:
         
         opposite = not default
         validArgs = []
+        
         for i in range( len( args ) ):
             validArgs += checkInputs.validKwargs( kwargs, args[i] )
         
