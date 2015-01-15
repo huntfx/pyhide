@@ -44,6 +44,7 @@ class ImageStore:
         
         self.printProgress = checkInputs.checkBooleanKwargs( kwargs, True, 'p', 'print', 'printProgress', 'printOutput' )
         
+        
     def write( self, input, **kwargs ):
                 
         #If image should be uploaded
@@ -56,9 +57,6 @@ class ImageStore:
         #If custom image data should be returned but nothing else
         returnCustomImageInfo = checkInputs.checkBooleanKwargs( kwargs, False, 'getInfo', 'returnInfo', 'getCustomInfo', 'returnCustomInfo', 'getImageInfo', 'returnImageInfo', 'getCustomImageInfo', 'returnCustomImageInfo', 'getCustomInformation', 'returnCustomInformation', 'getImageInformation', 'returnImageInformation', 'getCustomImageInformation', 'returnCustomImageInformation' )
         
-        #If the cache information should be returned
-        returnCache = checkInputs.checkBooleanKwargs( kwargs, False, 'getCache', 'returnCache', 'printCache', 'outputCache' )
-        print returnCache
         #Output all input data as black to debug
         debugData = checkInputs.checkBooleanKwargs( kwargs, False, 'debug', 'debugResult', 'debugOutput' )
         if debugData == True:
@@ -201,14 +199,20 @@ class ImageStore:
                         try:
                         
                             textFile = open( self.defaultCacheDirectory + "/" + self.defaultCacheName, "r")
+                            
                             try:
                             
                                 textFileData = self.decodeData( textFile.read(), decode = True )
+                                                                    
                                 try:
+                                    #[hash] [ [cutoffmode, validpixels], url ]
+                                    #[bpp]: amount
+                                    
+                                    #[cutoff][bpp]: amount
                                     currentImageData = textFileData[imageMD5]
-                                    storedCutoffMode = int( currentImageData[0][0] )
-                                    storedValidPixels = currentImageData[0][1]
-                                    storedImageURL = currentImageData[1]
+                                    storedCutoffMode = int( currentImageData[0] )
+                                    storedValidPixels = currentImageData[1]
+                                    storedImageURL = currentImageData[2]
                                     successfulRead = True
                                     
                                 except:
@@ -226,11 +230,6 @@ class ImageStore:
                         
                     storedImage = self.readImage( storedImageURL )
                 
-                if returnCache == True:
-                    if successfulRead == True:
-                        return currentImageData
-                    else:
-                        return None
                 
                 if successfulRead == True and storedImage != None:
                     
@@ -351,18 +350,21 @@ class ImageStore:
                 #Find maximum size image can store for bits per colour
                 nextTime = time()+self.outputProgressTime
                 validPixels = {}
+                for i in cutoffModes:
+                    validPixels[i] = {}
+                    
                 pixelCount = 0
                 totalCount = float( 8*len( rawData ) )
                 for i in range( 8 ):
                                             
                     bitsPerPixel = i+1
-                    validPixels[bitsPerPixel] = 0
+                    validPixels[cutoffMode][bitsPerPixel] = 0
                     colourIncreaseRange, colourReduceRange = self.validRange( cutoffMode, bitsPerPixel )
                     
                     for j in range( len( rawData ) ):
                     
                         if rawData[j] in colourIncreaseRange or rawData[j] in colourReduceRange:
-                            validPixels[bitsPerPixel] += 1
+                            validPixels[cutoffMode][bitsPerPixel] += 1
                             
                         #Output progress
                         pixelCount += 1
@@ -388,11 +390,11 @@ class ImageStore:
                     cutoffMode = customCutoffMode
                 validPixels = storedValidPixels
             
-            validPixelsTotal = [number*bits for number, bits in validPixels.iteritems()]
+            validPixelsTotal = [number*bits for number, bits in validPixels[cutoffMode].iteritems()]
             bitsPerPixelMax = validPixelsTotal.index( max( validPixelsTotal ) )+1
             
             #Get maximum bytes per bits
-            imageBytes = validPixels[ bitsPerPixelMax ]
+            imageBytes = validPixels[cutoffMode][ bitsPerPixelMax ]
             if self.printProgress == True:
                 print "Image can store up to around " + str( imageBytes ) + " bytes (" + str( imageBytes/1024 ) + "kb)"
             
@@ -418,7 +420,7 @@ class ImageStore:
             bitsPerPixel = 1
             bytesNeeded = ( lengthOfInputData*8 )/bitsPerPixel+3 #Avoids having to actually split the input data
             
-            while validPixels[bitsPerPixel] < bytesNeeded:
+            while validPixels[cutoffMode][bitsPerPixel] < bytesNeeded:
             
                 if bitsPerPixel > 7:
                     if self.printProgress == True:
@@ -433,7 +435,7 @@ class ImageStore:
             
             #Write to ini file
             if writeToINI == True:
-                textFileData[imageMD5] = [[cutoffMode,validPixels], customImageInputPath]
+                textFileData[imageMD5] = [cutoffMode, validPixels, customImageInputPath]
                 textFile.write( self.encodeData( textFileData, encode = True ) )
                 textFile.close()
             
@@ -1005,6 +1007,11 @@ class ImageStore:
         
         return colourIncreaseRange, colourReduceRange
         
+    def cache( self ):
+        try:
+            return self.decodeData( open( self.defaultCacheDirectory + "/" + self.defaultCacheName, "r").read(), decode = True )
+        except:
+            return None
         
     def readImage( self, location ):
         
