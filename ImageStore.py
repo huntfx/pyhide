@@ -86,19 +86,78 @@ class ImageStore:
         #Custom cutoff mode
         validArgs = checkInputs.validKwargs( kwargs, 'cM', 'cutoff', 'cutoffMode' )
         customCutoffMode = None
+        validCustomCutoffModes = []
         for i in range( len( validArgs ) ):
             try:
-                customCutoffMode = int( kwargs[validArgs[i]] )
-                if 0 < customCutoffMode < 5:
-                    break
+                if "," in str( kwargs[validArgs[i]] ) or type( kwargs[validArgs[i]] ) == tuple:
+                
+                    #If provided as tuple
+                    if type( kwargs[validArgs[i]] ) == tuple:
+                        customModeList = kwargs[validArgs[i]]
+                                
+                    #If provided as string
+                    else:
+                        customModeList = kwargs[validArgs[i]].replace( "(", "" ).replace( ")", "" ).split( "," )
+                               
+                    #Build list of all values
+                    for j in range( len( customModeList ) ):
+                        try:
+                            customCutoffMode = int( customModeList[j] )
+                            if 0 < customCutoffMode < self.maxCutoffModes+1:
+                                validCustomCutoffModes.append( customCutoffMode )
+                        except:
+                            customCutoffMode = None
+                            
+                    if len( validCustomCutoffModes ) > 0:
+                        break
+                    
                 else:
-                    customCutoffMode = None
+                    customCutoffMode = int( kwargs[validArgs[i]] )
+                    if 0 < customCutoffMode < self.maxCutoffModes+1:
+                        break
+                    else:
+                        customCutoffMode = None
+                        
             except:
                 customCutoffMode = None
-       
+        
+        #Run code on final cutoff number
+        if len( validCustomCutoffModes ) > 0:
+            customCutoffMode = validCustomCutoffModes[-1]
+        
         #If image should be output with all cutoff modes
         allCutoffModes = checkInputs.checkBooleanKwargs( kwargs, False, 'a', 'all', 'aCM', 'allCutoff', 'allCutoffs', 'allModes', 'allCutoffMode', 'allCutoffModes' )
         allOutputs = []
+        
+        #Automatically set custom cutoff modes to all
+        if allCutoffModes == True:
+            validCustomCutoffModes = list( range( self.maxCutoffModes+1 ) )
+        
+        
+        #Avoid running code again if it's already recursive
+        usingCustomModesAlready = checkInputs.checkBooleanKwargs( kwargs, False, 'usingCustomModesAlready' )
+        if usingCustomModesAlready == False:
+        
+            validCustomCutoffModes.sort()
+            kwargs["usingCustomModesAlready"] = True
+            
+            #Run code again for each cutoff mode
+            for i in range( len( validCustomCutoffModes )-1 ):
+            
+                kwargs["useThisInstead"] = validCustomCutoffModes[i]
+                
+                newImageName = self.imageName.replace( ".png", "" ) + ".m" + str( validCustomCutoffModes[i] ) + ".png"
+                otherURLS = ImageStore( newImageName ).write( input, **kwargs )
+                if otherURLS != None:
+                    allOutputs += otherURLS
+            
+            self.imageName = self.imageName.replace( ".png", "" ) + ".m" + str( validCustomCutoffModes[-1] ) + ".png"
+        
+        else:
+            customCutoffMode = kwargs["useThisInstead"]
+            
+            
+        '''
         if allCutoffModes == True:
             try:
                 customCutoffMode = kwargs['allCutoffModesNum'] + 1
@@ -106,13 +165,16 @@ class ImageStore:
                 customCutoffMode = 0
             kwargs['allCutoffModesNum'] = customCutoffMode
             self.imageName = self.imageName.replace( ".png", "" ).replace( ".CM" + str( customCutoffMode-1 ), "" ) + ".CM" + str( customCutoffMode ) + ".png"
+            
             if customCutoffMode < self.maxCutoffModes:
                 otherURLS = ImageStore( self.imageName ).write( input, **kwargs )
                 if otherURLS != None:
                     allOutputs += otherURLS
+                    
             else:
                 customCutoffMode = self.maxCutoffModes
-       
+            '''
+            
         #Ratio of width to height
         validArgs = checkInputs.validKwargs( kwargs, 'r', 'ratio', 'sizeRatio', 'widthRatio', 'heightRatio', 'widthToHeightRatio' )
         ratioWidth = math.log( 1920 ) / math.log( 1920*1080 )
@@ -692,7 +754,6 @@ class ImageStore:
                 print "Done."
             
             allOutputs += [outputList]
-            allOutputs.reverse()
             return allOutputs
         else:
             return None
