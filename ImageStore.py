@@ -205,10 +205,7 @@ class ImageStore:
                                 textFileData = self.decodeData( textFile.read(), decode = True )
                                                                     
                                 try:
-                                    #[hash] [ [cutoffmode, validpixels], url ]
-                                    #[bpp]: amount
-                                    
-                                    #[cutoff][bpp]: amount
+                                
                                     currentImageData = textFileData[imageMD5]
                                     storedCutoffMode = int( currentImageData[0] )
                                     storedValidPixels = currentImageData[1]
@@ -304,13 +301,29 @@ class ImageStore:
             cutoffModeAmount = {}
             colourRange = {}
             cutoffModes = range( 8 )
+            invalidCutoffMode = len( cutoffModes )
             
+            #Set up valid pixels dictionary
+            validPixels = {}
             for i in cutoffModes:
                 cutoffModeAmount[i] = 0
                 colourRange[i] = self.validRange( i, bitsPerPixel )
+                validPixels[i] = {}
+            validPixels[i+1] = {}
             
-            if successfulRead == False:
+            #Read valid pixels dictionary from cache
+            if successfulRead == True:
+                validPixels = storedValidPixels
+            else:
+                storedCutoffMode = invalidCutoffMode
                 
+            #Use custom set cutoff mode
+            if customCutoffMode != None:
+                storedCutoffMode = customCutoffMode
+            
+            print validPixels
+            if successfulRead == False and len( validPixels[storedCutoffMode] ) == 0:
+
                 #Calculate max data that can be stored
                 print "Calculating the best method to store data..."
                 totalPixelCount = 0
@@ -328,30 +341,31 @@ class ImageStore:
                             if self.printProgress == True:
                                 print " " + str( round( 100 * totalPixelCount / imageSize, 1 ) ) + "% completed"
                 
-                    for rgb in range( 3 ):
-                        rawData.append( pixels[rgb] )
-                        
-                        #Count all valid values to find best cutoff mode
-                        if totalPixelCount > 0:
-                            for i in cutoffModes:
+                    #Links with above comment, valid pixels has no data stored
+                    if storedCutoffMode == invalidCutoffMode:
+                        for rgb in range( 3 ):
+                            rawData.append( pixels[rgb] )
                             
-                                if pixels[rgb] in colourRange[i][0] or pixels[rgb] in colourRange[i][1]:
-                                    cutoffModeAmount[i] += 1
+                            #Count all valid values to find best cutoff mode
+                            if totalPixelCount > 0:
+                                for i in cutoffModes:
+                                
+                                    if pixels[rgb] in colourRange[i][0] or pixels[rgb] in colourRange[i][1]:
+                                        cutoffModeAmount[i] += 1
                                     
                     totalPixelCount += 1
                     
                 #Select best cutoff mode
-                cutoffMode = max( cutoffModeAmount.iteritems(), key=operator.itemgetter( 1 ) )[0]
-                if customCutoffMode != None:
-                    cutoffMode = customCutoffMode
+                if storedCutoffMode == invalidCutoffMode:
+                    cutoffMode = max( cutoffModeAmount.iteritems(), key=operator.itemgetter( 1 ) )[0]
+                else:
+                    cutoffMode = storedCutoffMode
+                                                
                 print "Using storing mode " + str( cutoffMode ) + "."
                 print "Calculating how much data can be stored for different amounts of bits using this mode..."
                 
                 #Find maximum size image can store for bits per colour
                 nextTime = time()+self.outputProgressTime
-                validPixels = {}
-                for i in cutoffModes:
-                    validPixels[i] = {}
                     
                 pixelCount = 0
                 totalCount = float( 8*len( rawData ) )
