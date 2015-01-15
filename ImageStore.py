@@ -80,18 +80,31 @@ class ImageStore:
         
         #Custom cutoff mode
         validArgs = checkInputs.validKwargs( kwargs, 'cM', 'cutoff', 'cutoffMode' )
-        
         customCutoffMode = None
         for i in range( len( validArgs ) ):
             try:
-                customCutoffMode = int( kwargs( validArgs[i] ) )
+                customCutoffMode = int( kwargs[validArgs[i]] )
                 if 0 < customCutoffMode < 5:
                     break
                 else:
                     customCutoffMode = None
             except:
                 customCutoffMode = None
-                
+       
+        #If image should be output with all cutoff modes
+        allCutoffModes = checkInputs.checkBooleanKwargs( kwargs, False, 'aCM', 'allCutoff', 'allCutoffs', 'allCutoffMode', 'allCutoffModes' )
+        if allCutoffModes == True:
+            try:
+                customCutoffMode = kwargs['allCutoffModesNum'] + 1
+            except:
+                customCutoffMode = 0
+            kwargs['allCutoffModesNum'] = customCutoffMode
+            self.imageName = self.imageName.replace( ".png", "" ).replace( ".CM" + str( customCutoffMode-1 ), "" ) + ".CM" + str( customCutoffMode ) + ".png"
+            if customCutoffMode < 4:
+                ImageStore( self.imageName ).write( input, **kwargs )
+            else:
+                customCutoffMode = 4
+       
         #Ratio of width to height
         validArgs = checkInputs.validKwargs( kwargs, 'r', 'ratio', 'sizeRatio', 'widthRatio', 'heightRatio', 'widthToHeightRatio' )
         ratioWidth = math.log( 1920 ) / math.log( 1920*1080 )
@@ -191,6 +204,8 @@ class ImageStore:
                                     storedCutoffMode = int( currentImageData[0][0] )
                                     storedValidPixels = currentImageData[0][1]
                                     storedImageURL = currentImageData[1]
+                                    storedHigherThan128 = currentImageData[2][0]
+                                    storedLowerThan128 = currentImageData[2][1]
                                     successfulRead = True
                                     
                                 except:
@@ -280,7 +295,9 @@ class ImageStore:
             #Get correct range
             cutoffModeAmount = {}
             colourRange = {}
-            cutoffModes = [0,1,2]
+            cutoffModes = [0,1,2,3,4]
+            higherThan128 = 0
+            lowerThan128 = 0
             
             for i in cutoffModes:
                 cutoffModeAmount[i] = 0
@@ -294,6 +311,12 @@ class ImageStore:
                     for rgb in range( 3 ):
                         rawData.append( pixels[rgb] )
                         
+                        #Count how many higher and lower than 128
+                        if pixels[rgb] < 128:
+                            lowerThan128 += 1
+                        elif pixels[rgb] > 128:
+                            higherThan128 += 1
+                        
                         #Count all valid values to find best cutoff mode
                         if totalPixelCount > 0:
                             for i in cutoffModes:
@@ -302,7 +325,7 @@ class ImageStore:
                                     cutoffModeAmount[i] += 1
                                     
                     totalPixelCount += 1
-                
+                    
                 #Select best cutoff mode
                 cutoffMode = max( cutoffModeAmount.iteritems(), key=operator.itemgetter( 1 ) )[0]
                 if customCutoffMode != None:
@@ -320,7 +343,7 @@ class ImageStore:
                         if rawData[j] in colourIncreaseRange or rawData[j] in colourReduceRange:
                             validPixels[bitsPerPixel] += 1
             else:
-                
+            
                 if self.printProgress == True:
                     print "File information read from cache."
                 #Store custom image information
@@ -333,11 +356,12 @@ class ImageStore:
                 if customCutoffMode != None:
                     cutoffMode = customCutoffMode
                 validPixels = storedValidPixels
+                higherThan128 = storedHigherThan128
+                lowerThan128 = storedLowerThan128
             
             validPixelsTotal = [number*bits for number, bits in validPixels.iteritems()]
             bitsPerPixelMax = validPixelsTotal.index( max( validPixelsTotal ) )+1
             print cutoffMode
-            print customCutoffMode
             #Get maximum bytes per bits
             imageBytes = validPixels[ bitsPerPixelMax ]
             if self.printProgress == True:
@@ -381,7 +405,7 @@ class ImageStore:
             
             #Write to ini file
             if writeToINI == True:
-                textFileData[imageMD5] = [[cutoffMode,validPixels], customImageInputPath]
+                textFileData[imageMD5] = [[cutoffMode,validPixels], customImageInputPath, [higherThan128, lowerThan128]]
                 textFile.write( self.encodeData( textFileData, encode = True ) )
                 textFile.close()
             
@@ -877,13 +901,13 @@ class ImageStore:
         #Convert numbers into characters
         else:
             encodedData = "".join( [chr( pixel ) for pixel in numberData] )
-        outputData = cPickle.loads( base64.b64decode( encodedData ) )
+        outputData = cPickle.loads( zlib.decompress( base64.b64decode( encodedData ) ) )
         
         return outputData
     
     def encodeData( self, input, **kwargs ):
         
-        encodedData = base64.b64encode( cPickle.dumps( input ) )
+        encodedData = base64.b64encode( zlib.compress( cPickle.dumps( input ) ) )
         if checkInputs.checkBooleanKwargs( kwargs, False, 'e', 'encode', 'encodeOnly' ) == True:
             return encodedData
         
