@@ -521,6 +521,19 @@ class ImageStore:
         
         if self.validPath( imageLocation ) == True:
         
+            #Save if from a URL
+            saved = False
+            if "http://" in imageLocation or "https://" in imageLocation:
+                try:
+                    inputImage = Image.open( cStringIO.StringIO( urllib.urlopen( imageLocation ).read() ) )
+                    imageFormat = inputImage.format
+                    imageSaveLocation = ( self.defaultCacheDirectory + "/" + self.defaultCacheName + "." + imageFormat ).replace( ".cache", "" )
+                    inputImage.save( imageSaveLocation, imageFormat ) 
+                    imageLocation = imageSaveLocation
+                    saved = True
+                except:
+                    pass
+                
             #Upload image
             try:
                 uploadedImage = pyimgur.Imgur( "0d10882abf66dec" ).upload_image( imageLocation, title="Image Data" )
@@ -551,6 +564,12 @@ class ImageStore:
                     
                 return uploadedImage.link
 
+            if saved == True:
+                try:
+                    os.remove( imageSaveLocation )
+                except:
+                    pass
+                
     def read( self, *args, **kwargs ):
     
         useBinary = False
