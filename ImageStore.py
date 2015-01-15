@@ -301,6 +301,7 @@ class ImageStore:
             if successfulRead == False:
                 
                 #Calculate max data that can be stored
+                print "Calculating the best method to store data..."
                 totalPixelCount = 0
                 imageDimensions = customImageInput.size
                 imageSize = float( imageDimensions[0]*imageDimensions[1] )
@@ -313,7 +314,7 @@ class ImageStore:
                     if self.printProgress == True:
                         pixelCount += 1
                         if pixelCount % 131072 == 0:
-                            print str( round( 100 * pixelCount / imageSize, 1 ) ) + "% completed."
+                            print "  " + str( round( 100 * pixelCount / imageSize, 1 ) ) + "% completed."
                 
                     for rgb in range( 3 ):
                         rawData.append( pixels[rgb] )
@@ -331,11 +332,23 @@ class ImageStore:
                 cutoffMode = max( cutoffModeAmount.iteritems(), key=operator.itemgetter( 1 ) )[0]
                 if customCutoffMode != None:
                     cutoffMode = customCutoffMode
+                    print "Using method number " + str( cutoffMode ) + "."
+                else:
+                    print "Selected method number " + str( cutoffMode ) + "."
                 
                 #Find maximum size image can store for bits per colour
+                print "Calculating how much data can be stored for different bit per pixel amounts using this mode..."
                 validPixels = {}
+                pixelCount = 0
+                totalCount = 8*len( rawData )
                 for i in range( 8 ):
                 
+                    #Output progress
+                    if self.printProgress == True:
+                        pixelCount += 1
+                        if pixelCount % 131072 == 0:
+                            print "  " + str( round( 100 * pixelCount / totalCount, 1 ) ) + "% completed."
+                            
                     bitsPerPixel = i+1
                     validPixels[bitsPerPixel] = 0
                     colourIncreaseRange, colourReduceRange = self.validRange( cutoffMode, bitsPerPixel )
@@ -343,6 +356,7 @@ class ImageStore:
                     for j in range( len( rawData ) ):
                         if rawData[j] in colourIncreaseRange or rawData[j] in colourReduceRange:
                             validPixels[bitsPerPixel] += 1
+                        pixelCount += 1
             else:
             
                 if self.printProgress == True:
@@ -389,7 +403,6 @@ class ImageStore:
             bitsPerPixel = 1
             bytesNeeded = ( lengthOfInputData*8 )/bitsPerPixel+3 #Avoids having to actually split the input data
             
-            #while validPixels[bitsPerPixel]/8*bitsPerPixel < bytesNeeded:
             while validPixels[bitsPerPixel] < bytesNeeded:
             
                 if bitsPerPixel > 7:
