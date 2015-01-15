@@ -6,7 +6,9 @@ Version: 0.2
 from PIL import Image
 from random import randint
 from subprocess import call
-import cPickle, base64, urllib, cStringIO, os, pyimgur, webbrowser, zipfile
+from time import time
+from datetime import datetime
+import cPickle, base64, urllib, cStringIO, os, pyimgur, webbrowser, zipfile, getpass
 versionNumber = '0.2.1'
 
 #This will let it check for any updates.
@@ -15,7 +17,7 @@ loadDataFromPersonalWebsite = True
 
 class ImageStore:
 
-    defaultImageName = "ImageDataStore"
+    defaultImageName = "ImageDataStore.png"
     pythonDirectory = os.getcwd()
     userDirectory = os.path.expanduser( "~" )
     defaultDirectory = userDirectory
@@ -43,11 +45,13 @@ class ImageStore:
     #This is just temporary, eventually I'll try use this to allow custom images
     def store( self ):
     
-        #Get text
+        #Define the text
+        timeOfCreation = datetime.fromtimestamp( time() ).strftime( '%d/%m/%Y %H:%M' )
+        infoText = ["Date created: " + timeOfCreation]
         try:
-            infoText = ImageStore( "http://images.peterhuntvfx.co.uk/code/ISInfo.png" ).read()
-        except:
-            infoText = "Code by Peter Hunt."
+            infoText = ["Username: " + str( getpass.getuser() ) + "\r\n"] + infoText
+        finally:
+            infoText.append( "\r\nVisit http://peterhuntvfx.co.uk to get a working version of the code." )
         
         #Compress into zip file
         zipName = "ImageInfo.zip"
@@ -56,7 +60,7 @@ class ImageStore:
         
         #Write zip file
         try:
-            zip.writestr( 'test.txt', infoText )
+            zip.writestr( 'Infomation.txt', "".join( infoText ) )
         finally:
             zip.close()
         
@@ -67,7 +71,6 @@ class ImageStore:
         call("copy /b " + locationOfImage + " + " + locationOfZip + " " + locationOfImage, shell=True)
         
         os.remove( zipLocation )
-        #print "copy /b " + locationOfImage + " + " + locationOfZip + " " + locationOfImage
         
     
     def write( self, input, **kwargs ):
@@ -151,28 +154,59 @@ class ImageStore:
         try:
             imageOutput.save( self.imageName, "PNG" )
         except:
-            print "Invalid path, attempting to save with the filename."
-            try:
-                self.imageName = self.defaultDirectory + "/" + self.imageName.rsplit( '/', 1 )[1]
-                imageOutput.save( self.imageName, "PNG" )
-            except:
-                print "Failed, resetting to default settings."
-                self.imageName = self.defaultDirectory + "/" + self.defaultImageName
-                imageOutput.save( self.imageName, "PNG" )
-        self.store()
+            failText = ["Failed saving file to " + self.imageName + "."]
+            failText.append( "You may have incorrect permissions or the file may be in use." )
+            failText.append( "\nAttempting to save in new location..." )
+            print " ".join( failText )
+            savingFailed = "\nFailed to save file."
+            
+            #If already in default directory
+            if self.imageName.rsplit( '/', 1 )[0] == self.defaultDirectory:
+                if self.imageName.rsplit( '/', 1 )[1] == self.defaultImageName:
+                    self.imageName = None
+                    failText = savingFailed
+                else:
+                    try:
+                        self.imageName = self.defaultDirectory + "/" + self.defaultImageName
+                        imageOutput.save( self.imageName, "PNG" )
+                        failText = None
+                    except:
+                        self.imageName = None
+                        failText = savingFailed
+            #If not in default directory
+            else:
+                try:
+                    self.imageName = self.defaultDirectory + "/" + self.imageName.rsplit( '/', 1 )[1]
+                    imageOutput.save( self.imageName, "PNG" )
+                    failText = None
+                except:
+                    try:
+                        self.imageName = self.defaultDirectory + "/" + self.defaultImageName
+                        imageOutput.save( self.imageName, "PNG" )
+                        failText = None
+                    except:
+                        failText = savingFailed
+                        self.imageName = None
+        
         outputText = [self.imageName]
         
-        #Upload to imgur
-        if upload == True:
-            print "Uploading image..."
-            uploadedImage = pyimgur.Imgur( "0d10882abf66dec" ).upload_image( self.imageName, title="Image Data" )
-            if str( uploadedImage.type ).replace( "image/", "" ) != "png":
-                print "Error: PNG file is too large for Imgur."
-            else:
-                outputText.append( str( uploadedImage.link ) )
-                if openImage == True:
-                    webbrowser.open( uploadedImage.link )
-
+        #Make sure image exists first
+        if self.imageName != None:
+        
+            self.store()
+            
+            #Upload to imgur
+            if upload == True:
+                print "Uploading image..."
+                uploadedImage = pyimgur.Imgur( "0d10882abf66dec" ).upload_image( self.imageName, title="Image Data" )
+                if str( uploadedImage.type ).replace( "image/", "" ) != "png":
+                    print "Error: PNG file is too large for Imgur."
+                else:
+                    outputText.append( str( uploadedImage.link ) )
+                    if openImage == True:
+                        webbrowser.open( uploadedImage.link )
+        else:
+            print failText
         return outputText
             
     def read( self ):
