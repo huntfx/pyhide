@@ -1,7 +1,7 @@
 from PIL import Image
 from random import randint
-import cPickle
-import base64
+import cPickle, base64
+import urllib, cStringIO
 
 class ImageStore:
 
@@ -70,12 +70,17 @@ class ImageStore:
 
     def read( self ):
     
-        print self.imageName + ".png"
         #Read image
-        try:
-            imageInput = Image.open( self.imageName + ".png" )
-        except:
-            return "No image found."
+        if "http://" in self.imageName:
+            try:
+                imageInput = Image.open( cStringIO.StringIO( urllib.urlopen( self.imageName + ".png" ).read() ) )
+            except:
+                return "No image found."
+        else:
+            try:
+                imageInput = Image.open( self.imageName + ".png" )
+            except:
+                return "No image found."
         
         #Store pixel info
         rawData = []
