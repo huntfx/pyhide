@@ -1,7 +1,7 @@
 '''
 Author: Peter Hunt
 Website: peterhuntvfx.co.uk
-Version: 0.3 (22/12/2014)
+Version: 3 (22/12/2014)
 '''
 from PIL import Image
 from random import randint
@@ -67,6 +67,31 @@ class ImageStore:
         #Write image information to cache, can speed up code execution by a lot
         writeToINI = checkInputs.checkBooleanKwargs( kwargs, True, 'DB', 'INI', 'cache', 'writeDB', 'writeINI', 'writeCache', 'writeToDB', 'writeDatabase', 'writeToCache', 'writeToINI', 'writeToDatabase' )
         
+        #Cutoff mode help
+        cutoffModeHelp = checkInputs.checkBooleanKwargs( kwargs, False, 'cMH', 'cMHelp', 'cutoffHelp', 'cutoffModeHelp' )
+        if cutoffModeHelp == True:
+            print "Cutoff modes:"
+            print "0: Move towards 0 (black)"
+            print "1: Move towards 128"
+            print "2: Move towards 255 (white)"
+            print "3: Move towards 64"
+            print "4: Move towards 196"
+            return None
+        
+        #Custom cutoff mode
+        validArgs = checkInputs.validKwargs( kwargs, 'cM', 'cutoff', 'cutoffMode' )
+        
+        customCutoffMode = None
+        for i in range( len( validArgs ) ):
+            try:
+                customCutoffMode = int( kwargs( validArgs[i] ) )
+                if 0 < customCutoffMode < 5:
+                    break
+                else:
+                    customCutoffMode = None
+            except:
+                customCutoffMode = None
+                
         #Ratio of width to height
         validArgs = checkInputs.validKwargs( kwargs, 'r', 'ratio', 'sizeRatio', 'widthRatio', 'heightRatio', 'widthToHeightRatio' )
         ratioWidth = math.log( 1920 ) / math.log( 1920*1080 )
@@ -140,7 +165,10 @@ class ImageStore:
             if useBinary == True:
                 #Find md5 of image
                 imageHash = md5.new()
-                imageHash.update(customImageInput.tostring())
+                try:
+                    imageHash.update( customImageInput.tostring() )
+                except:
+                    pass
                 imageMD5 = imageHash.hexdigest()
                 
                 #Open/create text file
@@ -277,6 +305,8 @@ class ImageStore:
                 
                 #Select best cutoff mode
                 cutoffMode = max( cutoffModeAmount.iteritems(), key=operator.itemgetter( 1 ) )[0]
+                if customCutoffMode != None:
+                    cutoffMode = customCutoffMode
                 
                 #Find maximum size image can store for bits per colour
                 validPixels = {}
@@ -300,11 +330,14 @@ class ImageStore:
                         
                 #Get stored values
                 cutoffMode = storedCutoffMode
+                if customCutoffMode != None:
+                    cutoffMode = customCutoffMode
                 validPixels = storedValidPixels
             
             validPixelsTotal = [number*bits for number, bits in validPixels.iteritems()]
             bitsPerPixelMax = validPixelsTotal.index( max( validPixelsTotal ) )+1
-            
+            print cutoffMode
+            print customCutoffMode
             #Get maximum bytes per bits
             imageBytes = validPixels[ bitsPerPixelMax ]
             if self.printProgress == True:
@@ -603,8 +636,8 @@ class ImageStore:
             
                 try:
                     inputImage = Image.open( cStringIO.StringIO( urllib.urlopen( imageLocation ).read() ) )
-                    imageFormat = inputImage.format
-                    imageSaveLocation = ( self.defaultCacheDirectory + "/" + self.defaultCacheName + "." + imageFormat ).replace( ".cache", "" )
+                    imageFormat = str( inputImage.format )
+                    imageSaveLocation = ( self.defaultCacheDirectory + "/" + self.defaultCacheName + "." + imageFormat.lower() ).replace( ".cache", "" )
                     inputImage.save( imageSaveLocation, imageFormat ) 
                     imageLocation = imageSaveLocation
                     saved = True
@@ -914,7 +947,19 @@ class ImageStore:
             colourMaxIncrease = 255-cutoffRange
             colourMinReduce = 0
             colourMaxReduce = -1
+        
+        elif cutoffMode == 3:
+            colourMinIncrease = 0
+            colourMaxIncrease = 64-cutoffRange
+            colourMinReduce = 64+cutoffRange
+            colourMaxReduce = 255
             
+        elif cutoffMode == 4:
+            colourMinIncrease = 0
+            colourMaxIncrease = 196-cutoffRange
+            colourMinReduce = 196+cutoffRange
+            colourMaxReduce = 255
+        
         else:
             colourMinIncrease = 0
             colourMaxIncrease = 128-cutoffRange
