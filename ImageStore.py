@@ -25,6 +25,9 @@ class ImageStore:
     
     versionNumber = 0.3
     
+    outputProgressIterations = 2**16
+    outputProgressTime = 5
+    
     def __init__( self, imageName=defaultImageName, **kwargs ):
     
         self.imageDataPadding = [116, 64, 84, 123, 93, 73, 106]
@@ -53,6 +56,9 @@ class ImageStore:
         #If custom image data should be returned but nothing else
         returnCustomImageInfo = checkInputs.checkBooleanKwargs( kwargs, False, 'getInfo', 'returnInfo', 'getCustomInfo', 'returnCustomInfo', 'getImageInfo', 'returnImageInfo', 'getCustomImageInfo', 'returnCustomImageInfo', 'getCustomInformation', 'returnCustomInformation', 'getImageInformation', 'returnImageInformation', 'getCustomImageInformation', 'returnCustomImageInformation' )
         
+        #If the cache information should be returned
+        returnCache = checkInputs.checkBooleanKwargs( kwargs, False, 'getCache', 'returnCache', 'printCache', 'outputCache' )
+        print returnCache
         #Output all input data as black to debug
         debugData = checkInputs.checkBooleanKwargs( kwargs, False, 'debug', 'debugResult', 'debugOutput' )
         if debugData == True:
@@ -220,6 +226,12 @@ class ImageStore:
                         
                     storedImage = self.readImage( storedImageURL )
                 
+                if returnCache == True:
+                    if successfulRead == True:
+                        return currentImageData
+                    else:
+                        return None
+                
                 if successfulRead == True and storedImage != None:
                     
                     customImageInputPath = storedImageURL
@@ -307,14 +319,15 @@ class ImageStore:
                 imageSize = float( imageDimensions[0]*imageDimensions[1] )
                 pixelCount = 0
                 
-                nextTime = time()+1
+                nextTime = time()+self.outputProgressTime
                 for pixels in customImageInput.getdata():
                     
                     #Output progress
-                    if self.printProgress == True:
-                        pixelCount += 1
-                        if pixelCount % 131072 == 0:
-                            print "  " + str( round( 100 * pixelCount / imageSize, 1 ) ) + "% completed."
+                    if pixelCount % self.outputProgressIterations == 0:
+                        if nextTime < time():
+                            nextTime = time()+self.outputProgressTime
+                            if self.printProgress == True:
+                                print " " + str( round( 100 * totalPixelCount / imageSize, 1 ) ) + "% completed"
                 
                     for rgb in range( 3 ):
                         rawData.append( pixels[rgb] )
@@ -332,31 +345,33 @@ class ImageStore:
                 cutoffMode = max( cutoffModeAmount.iteritems(), key=operator.itemgetter( 1 ) )[0]
                 if customCutoffMode != None:
                     cutoffMode = customCutoffMode
-                    print "Using method number " + str( cutoffMode ) + "."
-                else:
-                    print "Selected method number " + str( cutoffMode ) + "."
+                print "Using storing mode " + str( cutoffMode ) + "."
+                print "Calculating how much data can be stored for different amounts of bits using this mode..."
                 
                 #Find maximum size image can store for bits per colour
-                print "Calculating how much data can be stored for different bit per pixel amounts using this mode..."
+                nextTime = time()+self.outputProgressTime
                 validPixels = {}
                 pixelCount = 0
-                totalCount = 8*len( rawData )
+                totalCount = float( 8*len( rawData ) )
                 for i in range( 8 ):
-                
-                    #Output progress
-                    if self.printProgress == True:
-                        pixelCount += 1
-                        if pixelCount % 131072 == 0:
-                            print "  " + str( round( 100 * pixelCount / totalCount, 1 ) ) + "% completed."
-                            
+                                            
                     bitsPerPixel = i+1
                     validPixels[bitsPerPixel] = 0
                     colourIncreaseRange, colourReduceRange = self.validRange( cutoffMode, bitsPerPixel )
                     
                     for j in range( len( rawData ) ):
+                    
                         if rawData[j] in colourIncreaseRange or rawData[j] in colourReduceRange:
                             validPixels[bitsPerPixel] += 1
+                            
+                        #Output progress
                         pixelCount += 1
+                        if pixelCount % self.outputProgressIterations == 0:
+                            if nextTime < time():
+                                nextTime = time()+self.outputProgressTime
+                                if self.printProgress == True:
+                                    print " " + str( round( 100 * pixelCount / totalCount, 1 ) ) + "% completed"
+                        
             else:
             
                 if self.printProgress == True:
