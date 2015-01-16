@@ -64,6 +64,9 @@ class ImageStore:
         #If custom image data should be returned but nothing else
         returnCustomImageInfo = checkInputs.checkBooleanKwargs( kwargs, False, 'getInfo', 'returnInfo', 'getCustomInfo', 'returnCustomInfo', 'getImageInfo', 'returnImageInfo', 'getCustomImageInfo', 'returnCustomImageInfo', 'getCustomInformation', 'returnCustomInformation', 'getImageInformation', 'returnImageInformation', 'getCustomImageInformation', 'returnCustomImageInformation' )
         
+        #Final validation to read image that has just been created
+        validateOutput = checkInputs.checkBooleanKwargs( kwargs, False, 'cO', 'vO', 'checkOutput', 'validateOutput' )
+        
         #Output all input data as black to debug
         debugData = checkInputs.checkBooleanKwargs( kwargs, False, 'debug', 'debugResult', 'debugOutput' )
         if debugData == True:
@@ -383,13 +386,11 @@ class ImageStore:
             else:
                 bestCutoffMode = None
                 storedCutoffMode = invalidCutoffMode
-            print storedCutoffMode
-            return
                 
-            #Use custom set cutoff mode
+            #Use custom cutoff mode
             if customCutoffMode != None:
                 storedCutoffMode = customCutoffMode
-            
+                
             if successfulRead == False or len( validPixels[storedCutoffMode] ) == 0 or bestCutoffMode == None:
 
                 #Calculate max data that can be stored
@@ -429,9 +430,11 @@ class ImageStore:
                     cutoffMode = bestCutoffMode
                 else:
                     cutoffMode = storedCutoffMode
-                                                
-                print "Using storing mode " + str( cutoffMode ) + "."
-                print "Calculating how much data can be stored for different amounts of bits using this mode..."
+                      
+                
+                if self.printProgress == True:
+                    print "Using storing mode " + str( cutoffMode ) + "."
+                    print "Calculating how much data can be stored for different amounts of bits using this mode..."
                 
                 #Find maximum size image can store for bits per colour
                 nextTime = time()+self.outputProgressTime
@@ -472,6 +475,9 @@ class ImageStore:
                 if customCutoffMode != None:
                     cutoffMode = customCutoffMode
                 validPixels = storedValidPixels
+                
+                if self.printProgress == True:
+                    print "Using storing mode " + str( cutoffMode ) + "."
             
             validPixelsTotal = [number*bits for number, bits in validPixels[cutoffMode].iteritems()]
             bitsPerPixelMax = validPixelsTotal.index( max( validPixelsTotal ) )+1
@@ -725,6 +731,7 @@ class ImageStore:
                         failText = savingFailed
                         self.imageName = None
         
+        
         #Make sure image exists first
         if self.imageName != None:
             
@@ -769,8 +776,24 @@ class ImageStore:
             if self.printProgress == True:
                 print "Done."
             
+            #Check the output
+            if validateOutput == True:
+                try:
+                    if self.read() != input:
+                        "Fail"+0
+                    else:
+                        if self.printProgress == True:
+                            print "Successfully validated the data."
+                        
+                except:
+                    if self.printProgress == True:
+                        print "Error: Failed to validate the data. Please try again."
+                    return None
+                
+            #Return output
             allOutputs += [outputList]
             return allOutputs
+            
         else:
             return None
 
