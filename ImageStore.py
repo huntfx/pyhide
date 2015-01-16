@@ -25,21 +25,24 @@ class ImageStore:
     defaultCacheDirectory = pythonDirectory
     defaultCacheName = "ImageStore.cache"
     
-    versionNumber = "3.1.1"
-    
     #For displaying the percentage
     outputProgressIterations = 2**16 #Check time after this many calculations
     outputProgressTime = 5 #Output progress after this many seconds
     
-    maxCutoffModes = 7 #Keep at 7 unless you modify the validRange function, maximum possible is 8
+    
+    #Don't edit these
+    imageDataPadding = [116, 64, 84, 123, 93, 73, 106]
+    versionNumber = "3.1.1"
+    maxCutoffModes = 7
+    website = "http://peterhuntvfx.co.uk"
+    protocols = ["http://", "https://"]
     
     def __init__( self, imageName=defaultImageName, **kwargs ):
     
-        self.imageDataPadding = [116, 64, 84, 123, 93, 73, 106]
-        self.imageName = str( imageName ).replace( "\\", "/" ).rsplit( '.', 1 )[0] + ".png"
+        self.imageName = "{0}.png".format( str( imageName ).replace( "\\", "/" ).rsplit( '.', 1 )[0] )
         
         if "/" not in self.imageName:
-            self.imageName = self.defaultImageDirectory + "/" + self.imageName
+            self.imageName = "{0}/{1}".format( self.defaultImageDirectory, self.imageName )
             
         if self.imageName[-1:] == ":":
             self.imageName += "/"
@@ -53,8 +56,7 @@ class ImageStore:
         
     def write( self, input, **kwargs ):
     
-        allOutputs = []
-                
+        
         #If image should be uploaded
         upload = checkInputs.checkBooleanKwargs( kwargs, False, 'u', 'upload', 'uploadImage' )
         openImage = checkInputs.checkBooleanKwargs( kwargs, True, 'o', 'open', 'openImage', 'openUpload', 'openUploaded', 'openUploadImage', 'openUploadedImage' )
@@ -74,7 +76,7 @@ class ImageStore:
             padWithRandomData = False
         else:
             padWithRandomData = True
-        
+            
         #If it should just output the size of input
         outputSize = checkInputs.checkBooleanKwargs( kwargs, False, 's', 'iS', 'oS', 'size', 'inputSize', 'outputSize', 'returnSize', 'sizeOfInput', 'returnInputSize', 'returnSizeOfInput', 'testInput', 'testInputSize' )
         
@@ -83,6 +85,9 @@ class ImageStore:
         
         #If the custom image option should be dynamically disabled or the code stopped
         revertToDefault = checkInputs.checkBooleanKwargs( kwargs, True, 'revert', 'revertToBasic', 'revertToDefault', 'revertToDefaultImage', 'revertToDefaultStyle' )
+        
+        #If all URLs should be reuploaded to Imgur
+        uploadURLsToImgur = checkInputs.checkBooleanKwargs( kwargs, True, 'uploadURLToImgur', 'uploadURLSToImgur' )
         
         #Cutoff mode help
         cutoffModeHelp = checkInputs.checkBooleanKwargs( kwargs, False, 'cH', 'cMH', 'cHelp', 'cMHelp', 'cutoffHelp', 'cutoffModeHelp' )
@@ -112,11 +117,12 @@ class ImageStore:
                     break
                     
                 else:
-                    True/False
+                    raise RangeError( "number not in range" )
                     
             except:
                 ratioWidth = math.log( 1920 ) / math.log( 1920*1080 )
         
+        allOutputs = []
         if outputSize == False:
         
             #Check if custom image should be used
@@ -212,7 +218,7 @@ class ImageStore:
                     
                         kwargs["useThisInstead"] = validCustomCutoffModes[i]
                         
-                        newImageName = self.imageName.replace( ".png", "" ) + ".m" + str( validCustomCutoffModes[i] ) + ".png"
+                        newImageName = "{0}.m{1}.png".format( self.imageName.replace( ".png", "" ), validCustomCutoffModes[i] )
                         otherURLS = ImageStore( newImageName, **self.kwargs ).write( input, **kwargs )
                         if otherURLS != None:
                             allOutputs += otherURLS
@@ -220,7 +226,7 @@ class ImageStore:
                     if len( validCustomCutoffModes ) > 1:
                     
                         #Set up name and cutoff mode for final run
-                        self.imageName = self.imageName.replace( ".png", "" ) + ".m" + str( validCustomCutoffModes[-1] ) + ".png"
+                        self.imageName = "{0}.m{1}.png".format( self.imageName.replace( ".png", "" ), validCustomCutoffModes[-1] )
                         customCutoffMode = validCustomCutoffModes[-1]
                     
                 else:
@@ -265,11 +271,13 @@ class ImageStore:
                 
                 #This part allows you to skip iterating through every single pixel 24 times
                 if writeToINI == True:
+                    
+                    cachePath = self.cache( returnPath = True )
                 
-                    if os.path.exists( self.defaultCacheDirectory + "/" + self.defaultCacheName ):
+                    if os.path.exists( cachePath ):
                         try:
                         
-                            textFile = open( self.defaultCacheDirectory + "/" + self.defaultCacheName, "r")
+                            textFile = open( cachePath, "r")
                             
                             try:
                             
@@ -292,9 +300,9 @@ class ImageStore:
                         except:
                             pass
                             
-                        textFile = open( self.defaultCacheDirectory + "/" + self.defaultCacheName, "r+")
+                        textFile = open( cachePath, "r+")
                     else:
-                        textFile = open( self.defaultCacheDirectory + "/" + self.defaultCacheName, "w")
+                        textFile = open( cachePath, "w")
                         
                     storedImage = self.readImage( storedImageURL )
                 
@@ -309,7 +317,12 @@ class ImageStore:
                     uploadCustomImage = checkInputs.checkBooleanKwargs( kwargs, True, 'uI', 'uC', 'uO', 'uCI', 'uploadCustom', 'uploadOriginal', 'uploadCustomImage', 'uploadOriginalImage', 'uploadCustomURL', 'uploadOriginalURL' )
                     if uploadCustomImage == True and customImageInput != None:
                         
-                        if "http://i.imgur" not in customImageInputPath and "http:s//i.imgur" not in customImageInputPath:
+                        #If it should upload any non imgur url to imgur
+                        originalImageProtocols = self.protocols
+                        if uploadURLsToImgur == True:
+                            originalImageProtocols = [str( value ) + "i.imgur" for value in self.protocols]
+                        
+                        if not any( value in customImageInputPath for value in originalImageProtocols ):
                             
                             if self.printProgress == True:
                                 print "Uploading original image..."
@@ -318,7 +331,7 @@ class ImageStore:
                             
                             if uploadedImageURL != None:
                                 if self.printProgress == True:
-                                    print "Link to original image is " + str( uploadedImageURL ) + "."
+                                    print "Link to original image is {0}.".format( uploadedImageURL )
                                     self.stats( uploadedImageURL, False, imageMD5 )
                                     
                                 if writeToINI == False:
@@ -354,7 +367,7 @@ class ImageStore:
         
         if returnCustomImageInfo == False:
             if self.printProgress == True:
-                print "Input data is " + str( lengthOfInputData+3 ) + " bytes (" + str( ( lengthOfInputData+3 )/1024 ) + "kb)"
+                print "Input data is {0} bytes ({1}kb)". format( lengthOfInputData+3, ( lengthOfInputData+3 )/1024 )
         
         #Return the normal size of input data
         if outputSize == True:
@@ -413,7 +426,7 @@ class ImageStore:
                         if nextTime < time():
                             nextTime = time()+self.outputProgressTime
                             if self.printProgress == True:
-                                print " " + str( round( 100 * totalPixelCount / imageSize, 1 ) ) + "% completed"
+                                print " {0}% completed".format( round( 100 * totalPixelCount / imageSize, 1 ) )
                 
                         for rgb in range( 3 ):
                             rawData.append( pixels[rgb] )
@@ -426,7 +439,7 @@ class ImageStore:
                                             cutoffModeAmount[i] += 1
                                     
                     totalPixelCount += 1
-                    
+                  
                 #Select best cutoff mode
                 if bestCutoffMode == None:
                     bestCutoffMode = max( cutoffModeAmount.iteritems(), key=operator.itemgetter( 1 ) )[0]
@@ -436,7 +449,7 @@ class ImageStore:
                       
                 
                 if self.printProgress == True:
-                    print "Using storing mode " + str( cutoffMode ) + "."
+                    print "Using storing mode {0}.".format( cutoffMode )
                     print "Calculating how much data can be stored for different amounts of bits using this mode..."
                 
                 #Find maximum size image can store for bits per colour
@@ -461,7 +474,7 @@ class ImageStore:
                             if nextTime < time():
                                 nextTime = time()+self.outputProgressTime
                                 if self.printProgress == True:
-                                    print " " + str( round( 100 * pixelCount / totalCount, 1 ) ) + "% completed"
+                                    print " {0}% completed".format( round( 100 * pixelCount / totalCount, 1 ) )
                         
             else:
             
@@ -480,7 +493,7 @@ class ImageStore:
                 validPixels = storedValidPixels
                 
                 if self.printProgress == True:
-                    print "Using storing mode " + str( cutoffMode ) + "."
+                    print "Using storing mode {0}.".format( cutoffMode )
             
             validPixelsTotal = [number*bits for number, bits in validPixels[cutoffMode].iteritems()]
             bitsPerPixelMax = validPixelsTotal.index( max( validPixelsTotal ) )+1
@@ -488,10 +501,10 @@ class ImageStore:
             #Get maximum bytes per bits
             imageBytes = validPixels[cutoffMode][ bitsPerPixelMax ]
             if self.printProgress == True:
-                print "Image can store up to around " + str( imageBytes ) + " bytes (" + str( imageBytes/1024 ) + "kb)"
+                print "Image can store up to around {0} bytes ({1}kb)".format( imageBytes, imageBytes/1024 )
             
             inputBytes = ( len(inputData )*8 )/bitsPerPixelMax+3
-            outputText = "Input data at this level is " + str( inputBytes ) + " bytes (" + str( inputBytes/1024 ) + "kb)"
+            outputText = "Input data at this level is {0} bytes ({1}kb)".format( inputBytes, inputBytes/1024 )
             
             if inputBytes > imageBytes:
                 outputText += ", which is currently more than the image can hold."
@@ -515,8 +528,8 @@ class ImageStore:
             while validPixels[cutoffMode][bitsPerPixel] < bytesNeeded:
             
                 if bitsPerPixel > 7:
-                    if self.printProgress == True:
-                        outputText = "Error: Image not big enough to store data."
+                    
+                    outputText = "Error: Image not big enough to store data."
                         
                     #Stop code here if reverting to default isn't an option
                     if revertToDefault == False:
@@ -546,9 +559,9 @@ class ImageStore:
             if bitsPerPixel < 8:
                 if self.printProgress == True:
                     if bitsPerPixel > 1:
-                        print "Increased to " + str( bitsPerPixel ) + " bits of colour to fit data within the image."
+                        print "Increased to {0} bits of colour to fit data within the image.".format( bitsPerPixel )
                     else:
-                        print "Using " + str( bitsPerPixel ) + " bit of colour to fit data within the image."
+                        print "Using 1 bit of colour to fit data within the image."
     
                 #Encode input data
                 joinedData = "".join( inputData )
@@ -590,7 +603,7 @@ class ImageStore:
             cutoffMode = 9
     
             if self.printProgress == True:
-                print "Set width to " + str( width ) + " pixels and height to " + str( height ) + " pixels."
+                print "Set width to {0} pixels and height to {1} pixels.".format( width, height )
         
         #Draw image
         imageOutput = Image.new("RGB", ( width, height ) )
@@ -601,12 +614,12 @@ class ImageStore:
         if padWithRandomData == True:
         
             if useBinary == True:
-                maxImageAddition = 2**bitsPerPixel+bitsPerPixel-8
+                maxImageAddition = pow( 2, bitsPerPixel )+bitsPerPixel-8
                 minImageAddition = 0
                 
                 #Fix for if it goes under 1
                 if maxImageAddition < 1:
-                    maxImageAddition = 2**bitsPerPixel
+                    maxImageAddition = pow( 2, bitsPerPixel )
                 
             else:
                 maxImageAddition = 128
@@ -639,9 +652,18 @@ class ImageStore:
                             dataRGB[i] = inputData[numbersToAddIncrement]
                             numbersToAddIncrement += 1
                     except:
+                    
+                        #Calculate md5 before random stuff is added
+                        if isDataFromInput == True:
+                            imageHash = md5.new()
+                            imageHash.update( str( imageData ) )
+                            print imageOutput.tostring()
+                            imageMD5 = imageHash.hexdigest()
+                            isDataFromInput = False
+                        
+                        #Add random data
                         for i in range( 3 ):
                             dataRGB[i] = randint( minImageAddition, maxImageAddition )
-                        isDataFromInput = False
                     
                     dataRGB = [ number[1] for number in dataRGB.items()]
                      
@@ -671,6 +693,13 @@ class ImageStore:
                         dataRGB = [ dataRGB[0], dataRGB[1], dataRGB[2] ]
                         
                     else:
+                    
+                        #Calculate md5 before random stuff is added
+                        if isDataFromInput == True:
+                            imageHash = md5.new()
+                            imageHash.update( str( imageData ) )
+                            imageMD5 = imageHash.hexdigest()
+            
                         #Pad with random values so it's not such a clear line in the image
                         dataRGB = {}
                         for i in range( 3 ):
@@ -691,20 +720,20 @@ class ImageStore:
                     dataRGB = [255,255,255]
                     
                 imageData[x,y] = tuple( dataRGB )
-                
+        
         #Save image with some error catching
-        if "http://" in self.imageName or "https://" in self.imageName:
+        if any( value in self.imageName for value in self.protocols ):
         
             self.imageName = self.defaultImageName
             if self.printProgress == True:
                 print "Error: Can't use URLs when saving an image, resetting to default settings."
-            
+        
         try:
             imageOutput.save( self.imageName, "PNG" )
             
         except:
         
-            failText = ["Error: Failed saving file to " + self.imageName + "."]
+            failText = ["Error: Failed saving file to {0}.".format( self.imageName )]
             failText.append( "You may have incorrect permissions or the file may be in use." )
             failText.append( "\nAttempting to save in new location..." )
             if self.printProgress == True:
@@ -721,7 +750,7 @@ class ImageStore:
                 else:
                 
                     try:
-                        self.imageName = self.defaultImageDirectory + "/" + self.defaultImageName
+                        self.imageName = "{0}/{1}".format( self.defaultImageDirectory, self.defaultImageName )
                         imageOutput.save( self.imageName, "PNG" )
                         failText = None
                         
@@ -733,14 +762,14 @@ class ImageStore:
             else:
             
                 try:
-                    self.imageName = self.defaultImageDirectory + "/" + self.imageName.rsplit( '/', 1 )[1]
+                    self.imageName = "{0}/{1}".format( self.defaultImageDirectory, self.imageName.rsplit( '/', 1 )[1] )
                     imageOutput.save( self.imageName, "PNG" )
                     failText = None
                     
                 except:
                 
                     try:
-                        self.imageName = self.defaultImageDirectory + "/" + self.defaultImageName
+                        self.imageName = "{0}/{1}".format( self.defaultImageDirectory, self.defaultImageName )
                         imageOutput.save( self.imageName, "PNG" )
                         failText = None
                         
@@ -753,14 +782,6 @@ class ImageStore:
         if self.imageName != None:
             
             
-            #Find md5 of image
-            imageHash = md5.new()
-            try:
-                imageHash.update( self.imageName.tostring() )
-            except:
-                pass
-            imageMD5 = imageHash.hexdigest()
-            
             if self.printProgress == True:
                 print "Saved image."
             
@@ -770,12 +791,12 @@ class ImageStore:
             if self.printProgress == True:
                 print "Writing extra information into image file."
                 
-            infoText = ["Date created: " + str( self.dateFormat( time() ) )]
+            infoText = ["Date created: {0}".format( self.dateFormat( time() ) )]
             try:
-                infoText = ["Username: " + str( getpass.getuser() ) + "\r\n"] + infoText
+                infoText = ["Username: {0}".format( getpass.getuser() ) + "\r\n"] + infoText
             except:
                 pass
-            infoText.append( "\r\nVisit http://peterhuntvfx.co.uk to get a working version of the code." )
+            infoText.append( "\r\nVisit {0} to get a working version of the code.".format( self.website ) )
             
             #Write to zip file
             ImageStoreZip.write( "".join( infoText ), "information.txt", reset = True )
@@ -818,6 +839,7 @@ class ImageStore:
                         print "Error: Failed to validate the data. Please try again."
                     return None
             
+            
             self.stats( uploadedImageURL, lengthOfInputData+3, imageMD5 )
             
             #Return output
@@ -829,15 +851,25 @@ class ImageStore:
 
     #This is my only way of finding the stats as imgur doesn't say
     #It has no impact on the speed of the code, but you can set imageURL to 'None' to disable storing any URLS
-    def stats( self, imageURL, numBytes, md5 ):
+    def stats( self, imageURL, numBytes, imageMD5 ):
+    
+        #Check if md5 value is valid
+        if md5.new().hexdigest() == imageMD5:
+            imageMD5 = "".join("0" for x in range( 32 ))
+            
+        #Set user agent and URL
+        userAgent = "ImageStore/" + str( self.versionNumber )
+        siteAddress = "{0}/code/imagestore?url={1}&b={2}&m={3}".format( self.website, imageURL, int( numBytes ), imageMD5 )
+        
+        #Send a request to the website
         try:
-            userAgent = "ImageStore/" + str( self.versionNumber )
-            siteAddress = "http://peterhuntvfx.co.uk/code/imagestore?url={0}&b={1}&m={2}".format( imageURL, int( numBytes ), md5 )
             urllib2.urlopen( urllib2.Request( siteAddress, headers = { 'User-Agent': userAgent } ) )
-            print siteAddress
         except:
             pass
-            
+        
+        print imageMD5
+        return siteAddress
+        
     def uploadImage( self, imageLocation, openImage = False, **kwargs ):
         
         ignoreSize = checkInputs.checkBooleanKwargs( kwargs, False, 'i', 'iS', 'ignoreSize' )
@@ -846,12 +878,12 @@ class ImageStore:
         
             #Save if from a URL
             saved = False
-            if "http://" in imageLocation or "https://" in imageLocation:
+            if any( value in imageLocation for value in self.protocols ):
             
                 try:
                     inputImage = Image.open( cStringIO.StringIO( urllib2.urlopen( imageLocation ).read() ) )
                     imageFormat = str( inputImage.format )
-                    imageSaveLocation = ( self.defaultCacheDirectory + "/" + self.defaultCacheName + "." + imageFormat.lower() ).replace( ".cache", "" )
+                    imageSaveLocation = "{0}/{1}.{2}".format( self.defaultCacheDirectory, self.defaultCacheName, imageFormat.lower() ).replace( ".cache", "" )
                     inputImage.save( imageSaveLocation, imageFormat ) 
                     imageLocation = imageSaveLocation
                     saved = True
@@ -924,9 +956,9 @@ class ImageStore:
             
         if outputInfo == True:
             if originalVersionNumber != None:
-                print "Version number: " + str( originalVersionNumber )
+                print "Version number: {0}".format( originalVersionNumber )
             if originalCreationTime != None:
-                print "Date created: " + str( self.dateFormat( originalCreationTime ) )
+                print "Date created: {0}".format( self.dateFormat( originalCreationTime ) )
         
         #Store pixel info
         rawData = []
@@ -944,9 +976,15 @@ class ImageStore:
             if self.printProgress == True:
                 print "Error: Image had debug data set to true. Unable to read."
             return None
+            
         elif len( imageInfo ) > 2:
             if self.printProgress == True:
-                print "Stored data is invalid, but may be from before v0.3, attempting to continue."
+                outputText = "Stored data {0}."
+                if str( originalVersionNumber ) != str( self.versionNumber ):
+                    outputText.format( "is from an older version {0}" )
+                else:
+                    outputText.format( "appears to be invalid {0} anyway" )
+                outputText.format( ", attempting to continue" )
                 useBinary = False
                 
         elif bitsPerPixel == 8:
@@ -983,11 +1021,9 @@ class ImageStore:
             if len( validArgs ) > 0 and originalImage == None:
             
                 if self.printProgress == True:
-                    outputText = "Error: Could not read the custom input image"
+                    outputText = "Error: Could not read the custom input image."
                     if len( customImageURL ) > 0:
-                        outputText += ", reverting to the stored URL."
-                    else:
-                        outputText += "."
+                        outputText.replace( ".", ", reverting to the stored URL." )
                     print outputText
                     
                 originalImage = self.readImage( customImageURL )
@@ -1068,13 +1104,13 @@ class ImageStore:
                     
                     if len( customImageURL ) > 0:
                         print "Failed to decode data, however here is a URL to the correct image contained within the file."
-                        print "If you are using the original image, it may have just resized after being uploaded to Imgur."
+                        print "If you are using the original image stored on your computer, it may have resized after being uploaded to Imgur."
                     
                     else:
                         print "No URL was found stored in the image, you may have linked to the wrong image."
                 
                 elif len( customImageURL ) > 0:
-                    print "Failed to decode data from the stored URL (" + str( customImageURL ) + "), check the image still exists."
+                    print "Failed to decode data from the stored URL ({0}), check the image still exists.".format( customImageURL )
                 
                 else:
                     print "Failed to decode data from the image."
@@ -1130,7 +1166,7 @@ class ImageStore:
         path = str( path )
         
         #Check URL and local paths separately
-        if "http://" in path or "https://" in path:
+        if any( value in path for value in self.protocols ):
             try:
                 Image.open( cStringIO.StringIO( urllib2.urlopen( path ).read() ) )
                 isValid = True
@@ -1175,17 +1211,24 @@ class ImageStore:
         
     def cache( self, **kwargs ):
         
+        cachePath = "{0}/{1}".format( self.defaultCacheDirectory, self.defaultCacheName )
+        
+        #Return the path
+        returnPath = checkInputs.checkBooleanKwargs( kwargs, False, 'p', 'l', 'path', 'cachePath', 'loc', 'location', 'cacheLocation', 'returnPath', 'returnLoc', 'returnLocation' )
+        if returnPath == True:
+            return cachePath
+        
         #Delete the cache file
         cleanCache = checkInputs.checkBooleanKwargs( kwargs, False, 'c', 'clean', 'cleanCache', 'delCache', 'deleteCache' )
         if cleanCache == True:
             try:
-                os.remove( self.defaultCacheDirectory + "/" + self.defaultCacheName )
+                os.remove( cachePath )
             except:
                 pass
         
         #Open file and decode data
         try:
-            textFile = open( self.defaultCacheDirectory + "/" + self.defaultCacheName, "r")
+            textFile = open( cachePath, "r")
         except:
             return None
         try:
@@ -1203,7 +1246,7 @@ class ImageStore:
                 
             #Write back to cache
             try:
-                textFile = open( self.defaultCacheDirectory + "/" + self.defaultCacheName, "w")
+                textFile = open( cachePath, "w")
                 textFile.write( self.encodeData( outputData, encode = True ) )
                 textFile.close()
             except:
@@ -1230,7 +1273,7 @@ class ImageStore:
         
         location = str( location )
         
-        if "http://" in location or "https://" in location:
+        if any( value in location for value in self.protocols ):
         
             try:
                 imageURL = cStringIO.StringIO( urllib2.urlopen( location ).read() )
@@ -1270,7 +1313,7 @@ class ImageStoreZip:
             return False
             
         else:
-            zipLocation = str( path + "/" + self.zipName )
+            zipLocation = "{0}/{1}".format( path, self.zipName )
             if resetZip == True:
                 try:
                     os.remove( zipLocation )
@@ -1283,7 +1326,7 @@ class ImageStoreZip:
                 zip.writestr( fileName, input )
             except:
                 if ImageStore.printProgress == True:
-                    print "Failed to write zip file."
+                    print "Error: Failed to write zip file."
             zip.close()
     
     @classmethod
@@ -1307,7 +1350,7 @@ class ImageStoreZip:
                 imageLocation = None
                 
         #Read if zip file
-        if "http://" in imageLocation or "https://" in imageLocation:
+        if any( value in imageLocation for value in self.protocols ):
         
             imageLocation = cStringIO.StringIO( urllib2.urlopen( imageLocation ).read() )
             
@@ -1366,7 +1409,7 @@ class ImageStoreZip:
     def combine( self, **kwargs ):
         
         #Get location to read zip file
-        path = ImageStore.defaultImageDirectory + "/" + self.zipName
+        path = "{0}/{1}".format( ImageStore.defaultImageDirectory, self.zipName )
             
         if ImageStore().validPath( path ) == False:
             return False
@@ -1382,7 +1425,8 @@ class ImageStoreZip:
                 if ImageStore().validPath( imageLocation ) == True:
                     break
                 else:
-                    "Fail" + 0
+                    imageLocation = None
+                    raise IOError( "image doesn't exist" )
                     
             except:
                 imageLocation = None
@@ -1397,7 +1441,8 @@ class ImageStoreZip:
                 if ImageStore().validPath( zipLocation ) == True:
                     break
                 else:
-                    "Fail" + 0
+                    zipLocation = path
+                    raise IOError( "zip file doesn't exist" )
                     
             except:
                 zipLocation = path
@@ -1408,7 +1453,7 @@ class ImageStoreZip:
             locationOfZip = zipLocation.replace( "/", "\\\\" )
             
             #Copy zip file into picture
-            call( 'copy /b "' + locationOfImage + '" + "' + locationOfZip + '" "' + locationOfImage + '"', shell=True)
+            call( 'copy /b "{0}" + "{1}" "{0}"'.format( locationOfImage, locationOfZip ), shell=True)
             
             os.remove( zipLocation )
             
@@ -1479,4 +1524,7 @@ class checkInputs:
                 return default
         except:
             return default
-            
+
+class RangeError( Exception ):
+    pass
+    
