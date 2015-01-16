@@ -1,7 +1,7 @@
 '''
 Author: Peter Hunt
 Website: peterhuntvfx.co.uk
-Version: 3.1.1
+Version: 3.1.2
 '''
 
 #You can edit these values, but they lack error checking so be careful
@@ -108,7 +108,7 @@ class ImageStore:
     maxCutoffModes = 7
     website = "http://peterhuntvfx.co.uk"
     protocols = ["http://", "https://"]
-    debugging = True
+    debugging = False
     
     def __init__( self, imageName=defaultImageName, **kwargs ):
     
