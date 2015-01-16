@@ -12,14 +12,16 @@ import cPickle, base64, urllib2, cStringIO, os, pyimgur, webbrowser, zipfile, ge
 
 
 class ImageStore:
+
+    #There is no error checking here so be careful about changing values
         
+    customDirectory = "C:/"
     pythonDirectory = os.getcwd().replace( "\\", "/" )
     userDirectory = os.path.expanduser( "~" ).replace( "\\", "/" )
     
     #For saving the image
     defaultImageName = "ImageDataStore.png"
     defaultImageDirectory = userDirectory
-    customDirectory = "C:/"
     
     #For saving the cache
     defaultCacheDirectory = pythonDirectory
@@ -36,6 +38,7 @@ class ImageStore:
     maxCutoffModes = 7
     website = "http://peterhuntvfx.co.uk"
     protocols = ["http://", "https://"]
+    debugging = False
     
     def __init__( self, imageName=defaultImageName, **kwargs ):
     
@@ -49,6 +52,7 @@ class ImageStore:
             
         if self.imageName[-1:] == "/":
             self.imageName += self.defaultImageName
+        
         
         self.kwargs = kwargs
         self.printProgress = checkInputs.checkBooleanKwargs( kwargs, True, 'p', 'print', 'printProgress', 'printOutput', 'o', 'output', 'outputProgress' )
@@ -269,7 +273,7 @@ class ImageStore:
                 successfulRead = False
                 storedImageURL = ""
                 
-                #This part allows you to skip iterating through every single pixel 24 times
+                #This part allows you to skip iterating through every single pixel each time the code is run
                 if writeToINI == True:
                     
                     cachePath = self.cache( returnPath = True )
@@ -830,7 +834,9 @@ class ImageStore:
             if validateOutput == True:
                 try:
                     if self.read() != input:
-                        "Fail"+0
+                    
+                        raise ImageStoreError( "data failed to validate" )
+                        
                     else:
                         if self.printProgress == True:
                             print "Successfully validated the data."
@@ -864,11 +870,11 @@ class ImageStore:
         
         #Send a request to the website
         try:
-            urllib2.urlopen( urllib2.Request( siteAddress, headers = { 'User-Agent': userAgent } ) )
+            if self.debugging != True:
+                urllib2.urlopen( urllib2.Request( siteAddress, headers = { 'User-Agent': userAgent } ) )
         except:
             pass
         
-        return siteAddress
         
     def uploadImage( self, imageLocation, openImage = False, **kwargs ):
         
@@ -938,9 +944,22 @@ class ImageStore:
     def read( self, *args, **kwargs ):
     
         useBinary = False
+        debugDataDefaultAmount = 100 #How many characters to display by default
         
         #If it should just debug the data
-        debugData = checkInputs.checkBooleanKwargs( kwargs, False, 'debug', 'debugData', 'debugResult', 'debugOutput' )
+        validArgs = checkInputs.validKwargs( kwargs, 'debug', 'debugData', 'debugResult', 'debugOutput' )
+        debugData = False
+        for i in range( len( validArgs ) ):
+            try:
+                if kwargs[validArgs[i]] == True:
+                    debugData = debugDataDefaultAmount
+                    break
+                elif 0 < int( kwargs[validArgs[i]] ):
+                    debugData = int( kwargs[validArgs[i]] )
+            except:
+                debugData = False
+        if debugData == False and self.debugging == True:
+            debugData = debugDataDefaultAmount
 
         #Get image
         imageInput = self.readImage( self.imageName )
@@ -951,8 +970,12 @@ class ImageStore:
             
         #Output stored zip information
         outputInfo = checkInputs.checkBooleanKwargs( kwargs, debugData, 'o', 'output', 'outputInfo', 'outputInformation' )
+        
         try:
-            originalVersionNumber, originalCreationTime, originalCreationName, customImageURL = ImageStoreZip.read( imageLocation = self.imageName )
+            originalVersionNumber, originalCreationTime, originalCreationName, customImageURL, fileList = ImageStoreZip.read( imageLocation = self.imageName )
+            if debugData != False and self.printProgress == True:
+                print "Files stored in image: {0}".format( ", ".join( fileList ) )
+        
         except:
             outputInfo = False
             customImageURL = ""
@@ -1120,12 +1143,11 @@ class ImageStore:
                     
             decodedData = None
         
-        if debugData == True:
-            maxCharacters = 50
+        if debugData != False and self.printProgress == True:
             print "Length of stored data: {0}".format( len( decodedData ) )
-            print "Type of data: {0}".format( type( decodedData ) )
-            if len( str( decodedData ) ) > maxCharacters:
-                print "First 50 characters of data {0}".format( str( decodedData )[0:50] )
+            print "Type of data: {0}".format( str( type( decodedData ) ).replace( "<type '", "" ).replace( "'>", "" ) )
+            if len( str( decodedData ) ) > debugData:
+                print "First {0} characters of data: {1}".format( debugData, str( decodedData )[0:debugData] )
             else:
                 print "Stored data: {0}".format( decodedData )
         
@@ -1356,7 +1378,7 @@ class ImageStoreZip:
                 if ImageStore().validPath( imageLocation ) == True:
                     break
                 else:
-                    "Fail" + 0
+                    raise IOError( "image doesn't exist" )
                     
             except:
                 imageLocation = None
@@ -1380,8 +1402,8 @@ class ImageStoreZip:
         #Read zip data
         if zip != None:
             nameList = zip.namelist()
-            
-            if 'creationtime' not in nameList:
+                        
+            if 'creationtime' in nameList:
             
                 if 'version' in nameList:
                     versionNumber = zip.read( 'version' )
@@ -1415,7 +1437,7 @@ class ImageStoreZip:
             creationTime = None
             customURL = None
         
-        return [versionNumber, creationTime, creationName, customURL]
+        return [versionNumber, creationTime, creationName, customURL, nameList]
     
     @classmethod
     def combine( self, **kwargs ):
