@@ -41,14 +41,19 @@ If pyimgur or requests are not found, instead of throwing an error, it will just
 <br>
 
 <h4>Installation:</h4>
-Copy all files (aside from the older versions folder) into 'C:/Users/(name)/Documents/maya/(mayaversion)/scripts'.
-use 'from ImageStore import ImageStore' to import the module.
+Copy ImageStore.py with the PIL, requests and pyimgur folders into your Python directory.<br>
+Alternatively, you may add a new search path to any location through the following method, but it must be run each time Python is loaded.
+
+	import sys
+	sys.path.append( path to folder )
+	
+use `from ImageStore import ImageStore` to import the module.
 
 <br>
 
 <h4>Config:</h4>
 
-Load up imageStore.py and you can change the default save location of files. Normally, the image gets saved to My Documents, and the cache file to the python folder.
+Load up imageStore.py and you can change the default save location of files and a few other things. Normally, the image gets saved to My Documents, and the cache file to the python folder.
 
 <br>
 
