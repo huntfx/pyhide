@@ -28,7 +28,7 @@ class ImageStore:
     versionNumber = "3.1.1"
     
     #For displaying the percentage
-    outputProgressIterations = 2**16 #Check time this many calculations
+    outputProgressIterations = 2**16 #Check time after this many calculations
     outputProgressTime = 5 #Output progress after this many seconds
     
     maxCutoffModes = 7 #Keep at 7 unless you modify the validRange function, maximum possible is 8
@@ -319,6 +319,7 @@ class ImageStore:
                             if uploadedImageURL != None:
                                 if self.printProgress == True:
                                     print "Link to original image is " + str( uploadedImageURL ) + "."
+                                    self.stats( uploadedImageURL )
                                     
                                 if writeToINI == False:
                                 
@@ -808,10 +809,7 @@ class ImageStore:
                         print "Error: Failed to validate the data. Please try again."
                     return None
             
-            #This is my only way of finding the stats, but feel free to disable it if you want (has no impact on the code)
-            userAgent = "ImageStore/" + str( self.versionNumber )
-            siteAddress = "http://peterhuntvfx.co.uk/code/imagestore?url=" + str( uploadedImageURL )
-            urllib2.urlopen( urllib2.Request( siteAddress, headers = { 'User-Agent': userAgent } ) )
+            self.stats( uploadedImageURL )
             
             #Return output
             allOutputs += [outputList]
@@ -820,6 +818,17 @@ class ImageStore:
         else:
             return None
 
+    
+    #This is my only way of finding the stats as imgur doesn't say
+    #It has no impact on the speed of the code, but feel free to disable it anyway
+    def stats( self, imageURL ):
+        try:
+            userAgent = "ImageStore/" + str( self.versionNumber )
+            siteAddress = "http://peterhuntvfx.co.uk/code/imagestore?url=" + str( imageURL )
+            urllib2.urlopen( urllib2.Request( siteAddress, headers = { 'User-Agent': userAgent } ) )
+        except:
+            pass
+            
     def uploadImage( self, imageLocation, openImage = False, **kwargs ):
         
         ignoreSize = checkInputs.checkBooleanKwargs( kwargs, False, 'i', 'iS', 'ignoreSize' )
