@@ -8,7 +8,7 @@ from random import randint
 from subprocess import call
 from time import time
 from datetime import datetime
-import cPickle, base64, urllib, cStringIO, os, pyimgur, webbrowser, zipfile, getpass, zlib, operator, re, math, md5, requests
+import cPickle, base64, urllib2, cStringIO, os, pyimgur, webbrowser, zipfile, getpass, zlib, operator, re, math, md5, requests
 
 
 class ImageStore:
@@ -19,12 +19,13 @@ class ImageStore:
     #For saving the image
     defaultImageName = "ImageDataStore.png"
     defaultImageDirectory = userDirectory
+    customDirectory = "C:/"
     
     #For saving the cache
     defaultCacheDirectory = pythonDirectory
     defaultCacheName = "ImageStore.cache"
     
-    versionNumber = "3.1"
+    versionNumber = "3.1.1"
     
     #For displaying the percentage
     outputProgressIterations = 2**16 #Check time this many calculations
@@ -758,6 +759,7 @@ class ImageStore:
             #Zip extra information inside image
             if self.printProgress == True:
                 print "Writing extra information into image file."
+                
             infoText = ["Date created: " + str( self.dateFormat( time() ) )]
             try:
                 infoText = ["Username: " + str( getpass.getuser() ) + "\r\n"] + infoText
@@ -780,6 +782,7 @@ class ImageStore:
                     print "Error: Unable to write extra information."
             
             #Upload image
+            uploadedImageURL = None
             if upload == True:
                 if self.printProgress == True:
                     print "Uploading image..."
@@ -804,7 +807,12 @@ class ImageStore:
                     if self.printProgress == True:
                         print "Error: Failed to validate the data. Please try again."
                     return None
-                
+            
+            #This is my only way of finding the stats, but feel free to disable it if you want (has no impact on the code)
+            userAgent = "ImageStore/" + str( self.versionNumber )
+            siteAddress = "http://peterhuntvfx.co.uk/code/imagestore?url=" + str( uploadedImageURL )
+            urllib2.urlopen( urllib2.Request( siteAddress, headers = { 'User-Agent': userAgent } ) )
+            
             #Return output
             allOutputs += [outputList]
             return allOutputs
@@ -823,7 +831,7 @@ class ImageStore:
             if "http://" in imageLocation or "https://" in imageLocation:
             
                 try:
-                    inputImage = Image.open( cStringIO.StringIO( urllib.urlopen( imageLocation ).read() ) )
+                    inputImage = Image.open( cStringIO.StringIO( urllib2.urlopen( imageLocation ).read() ) )
                     imageFormat = str( inputImage.format )
                     imageSaveLocation = ( self.defaultCacheDirectory + "/" + self.defaultCacheName + "." + imageFormat.lower() ).replace( ".cache", "" )
                     inputImage.save( imageSaveLocation, imageFormat ) 
@@ -865,7 +873,8 @@ class ImageStore:
                 #Open image in browser
                 if openImage == True:
                     webbrowser.open( uploadedImage.link )
-                    
+                                
+                #Return the link
                 return uploadedImage.link
 
             if saved == True:
@@ -1105,7 +1114,7 @@ class ImageStore:
         #Check URL and local paths separately
         if "http://" in path or "https://" in path:
             try:
-                Image.open( cStringIO.StringIO( urllib.urlopen( path ).read() ) )
+                Image.open( cStringIO.StringIO( urllib2.urlopen( path ).read() ) )
                 isValid = True
             except:
                 isValid = False
@@ -1206,7 +1215,7 @@ class ImageStore:
         if "http://" in location or "https://" in location:
         
             try:
-                imageURL = cStringIO.StringIO( urllib.urlopen( location ).read() )
+                imageURL = cStringIO.StringIO( urllib2.urlopen( location ).read() )
                 return Image.open( imageURL )
                 
             except:
@@ -1282,7 +1291,7 @@ class ImageStoreZip:
         #Read if zip file
         if "http://" in imageLocation or "https://" in imageLocation:
         
-            imageLocation = cStringIO.StringIO( urllib.urlopen( imageLocation ).read() )
+            imageLocation = cStringIO.StringIO( urllib2.urlopen( imageLocation ).read() )
             
             if zipfile.is_zipfile( imageLocation ) == True:
                 zip = zipfile.ZipFile( imageLocation )
