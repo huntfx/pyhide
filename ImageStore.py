@@ -4,8 +4,6 @@ Website: peterhuntvfx.co.uk
 Version: 3.1.1
 '''
 
-#FIND HASH OF IMAGE WITH CACHE
-
 #You can edit these values, but they lack error checking so be careful
 def defaults():
 
@@ -15,12 +13,14 @@ def defaults():
     forceUpload = False
     forceOpenImageOnUpload = False
     forceDisableSaving = False
+    forceCacheWrite = True
     
     customFilename = "ImageStore.png" #May include a path
     customImage = None #Set to None to disable, or give a path
     shouldUpload = True
     shouldOpenImageOnUpload = False
     shouldDisableSaving = False
+    shouldWriteCache = True
     
     
     #These just make it easier to set default directories for files
@@ -49,6 +49,7 @@ def defaults():
     disableList.append( [forceUpload, shouldUpload] )
     disableList.append( [forceOpenImageOnUpload, shouldOpenImageOnUpload] )
     disableList.append( [forceDisableSaving, shouldDisableSaving] )
+    disableList.append( [forceCacheWrite, shouldWriteCache] )
     output.append( disableList )
     return output 
     
@@ -99,6 +100,8 @@ class ImageStore:
     shouldOpenOnUpload = defaultValues[3][3][1]
     forceDeleteFile = defaultValues[3][4][0]
     shouldDeleteFile = defaultValues[3][4][1]
+    forceCacheWrite = defaultValues[3][5][0]
+    shouldWriteCache = defaultValues[3][5][1]
     
     imageDataPadding = [116, 64, 84, 123, 93, 73, 106]
     versionNumber = "3.1.1"
@@ -130,13 +133,14 @@ class ImageStore:
         
     def write( self, input, **kwargs ):
     
+    
         #If image should be uploaded
         upload = checkInputs.checkBooleanKwargs( kwargs, False, 'u', 'upload', 'uploadImage' )
         if overrideUpload == True:
             upload = False
         elif self.forceUpload == True:
             upload = self.shouldUpload
-            
+        
         openImage = checkInputs.checkBooleanKwargs( kwargs, True, 'o', 'open', 'openImage', 'openUpload', 'openUploaded', 'openUploadImage', 'openUploadedImage' )
         if self.forceOpenOnUpload == True:
             openImage = self.shouldOpenOnUpload
@@ -167,6 +171,8 @@ class ImageStore:
         
         #Write image information to cache, can speed up code execution by a lot
         writeToINI = checkInputs.checkBooleanKwargs( kwargs, True, 'DB', 'INI', 'cache', 'writeDB', 'writeINI', 'writeCache', 'writeToDB', 'writeDatabase', 'writeToCache', 'writeToINI', 'writeToDatabase' )
+        if self.forceCacheWrite == True:
+            writeToINI = self.shouldWriteCache
         
         #If the custom image option should be dynamically disabled or the code stopped
         revertToDefault = checkInputs.checkBooleanKwargs( kwargs, True, 'revert', 'revertToBasic', 'revertToDefault', 'revertToDefaultImage', 'revertToDefaultStyle' )
@@ -231,11 +237,28 @@ class ImageStore:
                         
                 except:
                     customImageInput = None
+            
+            #Check image file path isn't URL, and set to custom image if it is
+            usedFilenameAsCustom = False
+            if any( value in self.imageName for value in self.protocols ):
+            
+                outputText = "Error: Can't use URLs when saving an image."
+                
+                if customImageInput == None and self.forceCustomImages == False:
+                    outputText = outputText.replace( ".", ", using URL as a custom image." )
+                    customImageInput = self.readImage( self.imageName )
                     
-            if len( validArgs ) > 0 and customImageInput == None:
+                if self.printProgress == True:
+                    print outputText
+                    
+                self.imageName = self.defaultImageName
+                usedFilenameAsCustom = True
+                
+            
+            if ( len( validArgs ) > 0 or usedFilenameAsCustom == True ) and customImageInput == None:
                 if self.printProgress == True:
                     print "Error: Custom image could not be read. Output image will be saved without it."
-                    
+            
             if customImageInput == None:
                 useCustomImageMethod = False
             else:
@@ -410,7 +433,7 @@ class ImageStore:
                         uploadCustomImage = self.shouldUpload
                     if uploadCustomImage == True and customImageInput != None and overrideUpload != True:
                         
-                        #If it should upload any non imgur url to imgur
+                        #If it should upload any non Imgur URL to Imgur
                         originalImageProtocols = self.protocols
                         if uploadURLsToImgur == True:
                             originalImageProtocols = [str( value ) + "i.imgur" for value in self.protocols]
@@ -444,7 +467,7 @@ class ImageStore:
         else:
             useCustomImageMethod = False
             
-        #Fix for gif images
+        #Fix for GIF images
         if customImageInputPath[-4:].lower() == ".gif":
             customImageInput = None
             customImageInputPath = ""
@@ -724,7 +747,7 @@ class ImageStore:
         else:
             maxImageAddition = 255
             minImageAddition = 255
-            
+        
         #Assign pixel colours
         for y in range( height ):
             for x in range( width ):
@@ -809,13 +832,6 @@ class ImageStore:
                     dataRGB = [0,0,0]
                     
                 imageData[x,y] = tuple( dataRGB )
-        
-        #Save image with some error catching
-        if any( value in self.imageName for value in self.protocols ):
-        
-            self.imageName = self.defaultImageName
-            if self.printProgress == True:
-                print "Error: Can't use URLs when saving an image, resetting to default settings."
         
         try:
             imageOutput.save( self.imageName, "PNG" )
