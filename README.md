@@ -38,6 +38,11 @@ Wrote some code to track stats, and cleaned up a lot of the URL checking.
 Added in debugging for reading images, it can display the first x decoded characters (any amount but 100 by default) and various other information about the image.
 If pyimgur or requests are not found, instead of throwing an error, it will just disable the upload capabilities and continue as normal.
 
+v3.1.2
+Made it a lot easier to force default values, which could be useful in an application.
+Putting a URL as the save path will attempt to use it as a custom image instead of throwing an error, and the cache function can return the hash of an image, to make it easier to locate in the cache.
+Fixed various other bugs such as black and white images crashing the code.
+
 <br>
 
 <h4>Installation:</h4>
@@ -295,6 +300,12 @@ Load up imageStore.py and you can change the default save location of files and 
     			 - Return the location where the cache is stored.
     			 - It will still return the location even if no cache file exists.
     				Default: False
+    				
+    			h/hash/imageHash
+    			 - True/None/String
+    			 - Return the hash of the image.
+    			 - If True is given instead of a location, the image location passed to the main class will be used.
+    			 	Default: None
     
     
     		If cache exists:
@@ -313,7 +324,7 @@ There may be a noticeable line if the input data is finished before the image en
 
 <h4>Compatibility:</h4>
 
-No versions are currently compatible with each other.
+No versions before 3.1 are compatible with each other.
 
 <br>
 
