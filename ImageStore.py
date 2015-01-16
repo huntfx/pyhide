@@ -65,7 +65,7 @@ class ImageStore:
         returnCustomImageInfo = checkInputs.checkBooleanKwargs( kwargs, False, 'getInfo', 'returnInfo', 'getCustomInfo', 'returnCustomInfo', 'getImageInfo', 'returnImageInfo', 'getCustomImageInfo', 'returnCustomImageInfo', 'getCustomInformation', 'returnCustomInformation', 'getImageInformation', 'returnImageInformation', 'getCustomImageInformation', 'returnCustomImageInformation' )
         
         #Final validation to read image that has just been created
-        validateOutput = checkInputs.checkBooleanKwargs( kwargs, False, 'cO', 'vO', 'checkOutput', 'validateOutput' )
+        validateOutput = checkInputs.checkBooleanKwargs( kwargs, False, 'cO', 'vO', 'checkOutput', 'validateOutput', 'checkImage', 'validateImage' )
         
         #Output all input data as black to debug
         debugData = checkInputs.checkBooleanKwargs( kwargs, False, 'debug', 'debugResult', 'debugOutput' )
@@ -81,7 +81,7 @@ class ImageStore:
         writeToINI = checkInputs.checkBooleanKwargs( kwargs, True, 'DB', 'INI', 'cache', 'writeDB', 'writeINI', 'writeCache', 'writeToDB', 'writeDatabase', 'writeToCache', 'writeToINI', 'writeToDatabase' )
         
         #If the custom image option should be dynamically disabled or the code stopped
-        revertToDefault = checkInputs.checkBooleanKwargs( kwargs, True, 'revert', 'revertToDefault', 'revertToDefaultImage', 'revertToDefaultStyle' )
+        revertToDefault = checkInputs.checkBooleanKwargs( kwargs, True, 'revert', 'revertToBasic', 'revertToDefault', 'revertToDefaultImage', 'revertToDefaultStyle' )
         
         #Cutoff mode help
         cutoffModeHelp = checkInputs.checkBooleanKwargs( kwargs, False, 'cH', 'cMH', 'cHelp', 'cMHelp', 'cutoffHelp', 'cutoffModeHelp' )
@@ -193,9 +193,10 @@ class ImageStore:
                 #If image should be output with all cutoff modes
                 allCutoffModes = checkInputs.checkBooleanKwargs( kwargs, False, 'a', 'all', 'aCM', 'allCutoff', 'allCutoffs', 'allModes', 'allCutoffMode', 'allCutoffModes' )
                 
-                #Automatically set custom cutoff modes to all
+                #Automatically set custom cutoff modes to all and disable reverting to the default method if image can't hold data
                 if allCutoffModes == True:
                     validCustomCutoffModes = list( range( self.maxCutoffModes+1 ) )
+                    revertToDefault = False
                 
                 
                 #Avoid running code again if it's already recursive
@@ -644,49 +645,63 @@ class ImageStore:
                      
                 #If data should be written over a custom image
                 else:
+                
                     if numbersToAddIncrement < len( numbersToAdd )-1:
                         dataRGB = {}
                         for i in range( 3 ):
+                        
                             try:
                                 if rawData[currentProgress+i] in colourIncreaseRange:
                                     dataRGB[i] = rawData[currentProgress+i] + numbersToAdd[numbersToAddIncrement]
                                     numbersToAddIncrement += 1
+                                    
                                 elif rawData[currentProgress+i] in colourReduceRange:
                                     dataRGB[i] = rawData[currentProgress+i] - numbersToAdd[numbersToAddIncrement]
                                     numbersToAddIncrement += 1
+                                    
                                 else:
                                     dataRGB[i] = rawData[currentProgress+i]
+                                    
                             except:
                                 dataRGB[i] = rawData[currentProgress+i]
                                 isDataFromInput = False
+                                
                         dataRGB = [ dataRGB[0], dataRGB[1], dataRGB[2] ]
+                        
                     else:
                         #Pad with random values so it's not such a clear line in the image
                         dataRGB = {}
                         for i in range( 3 ):
+                        
                             if rawData[currentProgress+i] in colourIncreaseRange:
                                 dataRGB[i] = rawData[currentProgress+i] + randint( minImageAddition, maxImageAddition )
+                                
                             elif rawData[currentProgress+i] in colourReduceRange:
                                 dataRGB[i] = rawData[currentProgress+i] - randint( minImageAddition, maxImageAddition )
+                                
                             else:
                                 dataRGB[i] = rawData[currentProgress+i]
+                                
                         dataRGB = [ dataRGB[0], dataRGB[1], dataRGB[2] ]
                         isDataFromInput = False
                 
                 if debugData == True and isDataFromInput == True:
                     dataRGB = [255,255,255]
+                    
                 imageData[x,y] = tuple( dataRGB )
                 
         #Save image with some error catching
         if "http://" in self.imageName or "https://" in self.imageName:
+        
+            self.imageName = self.defaultImageName
             if self.printProgress == True:
                 print "Error: Can't use URLs when saving an image, resetting to default settings."
-            self.imageName = self.defaultImageName
             
         try:
             imageOutput.save( self.imageName, "PNG" )
             
         except:
+        
             failText = ["Error: Failed saving file to " + self.imageName + "."]
             failText.append( "You may have incorrect permissions or the file may be in use." )
             failText.append( "\nAttempting to save in new location..." )
@@ -1437,3 +1452,4 @@ class checkInputs:
                 return default
         except:
             return default
+            
