@@ -71,7 +71,7 @@ class ImageStore:
         validateOutput = checkInputs.checkBooleanKwargs( kwargs, False, 'cO', 'vO', 'checkOutput', 'validateOutput', 'checkImage', 'validateImage' )
         
         #Output all input data as black to debug
-        debugData = checkInputs.checkBooleanKwargs( kwargs, False, 'debug', 'debugResult', 'debugOutput' )
+        debugData = checkInputs.checkBooleanKwargs( kwargs, False, 'debug', 'debugData', 'debugResult', 'debugOutput' )
         if debugData == True:
             padWithRandomData = False
         else:
@@ -626,8 +626,8 @@ class ImageStore:
                 minImageAddition = 52
                 
         else:
-            maxImageAddition = 0
-            minImageAddition = 0
+            maxImageAddition = 255
+            minImageAddition = 255
             
         #Assign pixel colours
         for y in range( height ):
@@ -642,6 +642,8 @@ class ImageStore:
                     dataRGB = [inputInfo, inputInfo, inputInfo]
                     if debugData == True:
                         dataRGB = [99,99,99]
+                        imageData[x,y] = tuple( dataRGB )
+                        continue
                 
                 #If an image should be made with the default method
                 elif useBinary == False:
@@ -653,12 +655,7 @@ class ImageStore:
                             numbersToAddIncrement += 1
                     except:
                     
-                        #Calculate md5 before random stuff is added
                         if isDataFromInput == True:
-                            imageHash = md5.new()
-                            imageHash.update( str( imageData ) )
-                            print imageOutput.tostring()
-                            imageMD5 = imageHash.hexdigest()
                             isDataFromInput = False
                         
                         #Add random data
@@ -694,12 +691,9 @@ class ImageStore:
                         
                     else:
                     
-                        #Calculate md5 before random stuff is added
                         if isDataFromInput == True:
-                            imageHash = md5.new()
-                            imageHash.update( str( imageData ) )
-                            imageMD5 = imageHash.hexdigest()
-            
+                            isDataFromInput = False
+                        
                         #Pad with random values so it's not such a clear line in the image
                         dataRGB = {}
                         for i in range( 3 ):
@@ -714,10 +708,9 @@ class ImageStore:
                                 dataRGB[i] = rawData[currentProgress+i]
                                 
                         dataRGB = [ dataRGB[0], dataRGB[1], dataRGB[2] ]
-                        isDataFromInput = False
                 
                 if debugData == True and isDataFromInput == True:
-                    dataRGB = [255,255,255]
+                    dataRGB = [0,0,0]
                     
                 imageData[x,y] = tuple( dataRGB )
         
@@ -781,6 +774,13 @@ class ImageStore:
         #Make sure image exists first
         if self.imageName != None:
             
+            #Find md5 of image
+            imageHash = md5.new()
+            try:
+                imageHash.update( self.readImage( self.imageName ).tostring() )
+            except:
+                pass
+            imageMD5 = imageHash.hexdigest()
             
             if self.printProgress == True:
                 print "Saved image."
@@ -791,21 +791,22 @@ class ImageStore:
             if self.printProgress == True:
                 print "Writing extra information into image file."
                 
-            infoText = ["Date created: {0}".format( self.dateFormat( time() ) )]
+            infoText = ["Date created: {0}\r\n".format( self.dateFormat( time() ) )]
             try:
                 infoText = ["Username: {0}".format( getpass.getuser() ) + "\r\n"] + infoText
             except:
                 pass
-            infoText.append( "\r\nVisit {0} to get a working version of the code.".format( self.website ) )
+            infoText.append( "Visit {0} to get a working version of the code.".format( self.website ) )
             
             #Write to zip file
-            ImageStoreZip.write( "".join( infoText ), "information.txt", reset = True )
+            if disableInfo == False:
+                ImageStoreZip.write( "".join( infoText ), "information.txt", reset = True )
+                ImageStoreZip.write( str( getpass.getuser() ) + "@" + str( time() ), "creationtime" )
+                ImageStoreZip.write( customImageInputPath, "url" )
+            else:
+                ImageStoreZip.write( infoText[-1], "information.txt", reset = True )
             ImageStoreZip.write( str( self.versionNumber ), "version" )
-            ImageStoreZip.write( str( getpass.getuser() ) + "@" + str( time() ), "creationtime" )
-            ImageStoreZip.write( customImageInputPath, "url" )
             
-            if disableInfo == True:
-                ImageStoreZip.write( "", "disable" )
             zipSuccess = ImageStoreZip.combine( image = self.imageName )
             
             if zipSuccess == False:
@@ -849,8 +850,8 @@ class ImageStore:
         else:
             return None
 
-    #This is my only way of finding the stats as imgur doesn't say
-    #It has no impact on the speed of the code, but you can set imageURL to 'None' to disable storing any URLS
+    #This is my only way of finding the stats as imgur doesn't say, this won't be available to view anywhere
+    #However, if you are against this, just disable the urllib2.urlopen() command
     def stats( self, imageURL, numBytes, imageMD5 ):
     
         #Check if md5 value is valid
@@ -867,7 +868,6 @@ class ImageStore:
         except:
             pass
         
-        print imageMD5
         return siteAddress
         
     def uploadImage( self, imageLocation, openImage = False, **kwargs ):
@@ -939,6 +939,9 @@ class ImageStore:
     
         useBinary = False
         
+        #If it should just debug the data
+        debugData = checkInputs.checkBooleanKwargs( kwargs, False, 'debug', 'debugData', 'debugResult', 'debugOutput' )
+
         #Get image
         imageInput = self.readImage( self.imageName )
         if imageInput == None:
@@ -947,7 +950,7 @@ class ImageStore:
             return None
             
         #Output stored zip information
-        outputInfo = checkInputs.checkBooleanKwargs( kwargs, False, 'o', 'output', 'outputInfo', 'outputInformation' )
+        outputInfo = checkInputs.checkBooleanKwargs( kwargs, debugData, 'o', 'output', 'outputInfo', 'outputInformation' )
         try:
             originalVersionNumber, originalCreationTime, originalCreationName, customImageURL = ImageStoreZip.read( imageLocation = self.imageName )
         except:
@@ -1116,6 +1119,15 @@ class ImageStore:
                     print "Failed to decode data from the image."
                     
             decodedData = None
+        
+        if debugData == True:
+            maxCharacters = 50
+            print "Length of stored data: {0}".format( len( decodedData ) )
+            print "Type of data: {0}".format( type( decodedData ) )
+            if len( str( decodedData ) ) > maxCharacters:
+                print "First 50 characters of data {0}".format( str( decodedData )[0:50] )
+            else:
+                print "Stored data: {0}".format( decodedData )
         
         return decodedData
 
@@ -1350,7 +1362,7 @@ class ImageStoreZip:
                 imageLocation = None
                 
         #Read if zip file
-        if any( value in imageLocation for value in self.protocols ):
+        if any( value in imageLocation for value in ImageStore.protocols ):
         
             imageLocation = cStringIO.StringIO( urllib2.urlopen( imageLocation ).read() )
             
@@ -1369,7 +1381,7 @@ class ImageStoreZip:
         if zip != None:
             nameList = zip.namelist()
             
-            if 'disable' not in nameList:
+            if 'creationtime' not in nameList:
             
                 if 'version' in nameList:
                     versionNumber = zip.read( 'version' )
