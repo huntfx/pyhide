@@ -4,8 +4,24 @@ Website: peterhuntvfx.co.uk
 Version: 3.1.1
 '''
 
+#FIND HASH OF IMAGE WITH CACHE
+
 #You can edit these values, but they lack error checking so be careful
 def defaults():
+
+    #These values will override any given to the script, set any 'force' value to True to use the corresponding settings below
+    forceCustomFilename = False
+    forceCustomImages = False
+    forceUpload = False
+    forceOpenImageOnUpload = False
+    forceDisableSaving = False
+    
+    customFilename = "ImageStore.png" #May include a path
+    customImage = None #Set to None to disable, or give a path
+    shouldUpload = True
+    shouldOpenImageOnUpload = False
+    shouldDisableSaving = False
+    
     
     #These just make it easier to set default directories for files
     #If changing the custom directory make sure the folder exists first
@@ -28,6 +44,12 @@ def defaults():
     output = [[defaultImageName, defaultImageDirectory]]
     output.append( [defaultCacheName, defaultCacheDirectory] )
     output.append( [outputProgressTime, outputProgressIterations] )
+    disableList = [[forceCustomFilename, customFilename]]
+    disableList.append( [forceCustomImages, customImage] )
+    disableList.append( [forceUpload, shouldUpload] )
+    disableList.append( [forceOpenImageOnUpload, shouldOpenImageOnUpload] )
+    disableList.append( [forceDisableSaving, shouldDisableSaving] )
+    output.append( disableList )
     return output 
     
 try:
@@ -41,6 +63,7 @@ from datetime import datetime
 import cPickle, base64, urllib2, cStringIO, os, webbrowser, zipfile, getpass, zlib, operator, re, math, md5
 
 #Disable upload features if requests and pyimgur are not found
+printImportError = True #Set this to false if you want to disable the warning if pyimgur or requests are not found
 global overrideUpload
 try:
     import pyimgur, requests
@@ -52,7 +75,8 @@ except:
         outputText = outputText.format( "" )
     except:
         outputText = outputText.format( " and requests" )
-    print outputText
+    if printImportError == True:
+        print outputText
     overrideUpload = True
 
     
@@ -65,15 +89,28 @@ class ImageStore:
     defaultCacheDirectory = defaultValues[1][1]
     outputProgressTime = defaultValues[2][0]
     outputProgressIterations = defaultValues[2][1]
+    forceCustomFilenames = defaultValues[3][0][0]
+    useThisCustomFilename = defaultValues[3][0][1]
+    forceCustomImages = defaultValues[3][1][0]
+    useThisCustomImage = defaultValues[3][1][1]
+    forceUpload = defaultValues[3][2][0]
+    shouldUpload = defaultValues[3][2][1]
+    forceOpenOnUpload = defaultValues[3][3][0]
+    shouldOpenOnUpload = defaultValues[3][3][1]
+    forceDeleteFile = defaultValues[3][4][0]
+    shouldDeleteFile = defaultValues[3][4][1]
     
     imageDataPadding = [116, 64, 84, 123, 93, 73, 106]
     versionNumber = "3.1.1"
     maxCutoffModes = 7
     website = "http://peterhuntvfx.co.uk"
     protocols = ["http://", "https://"]
-    debugging = False
+    debugging = True
     
     def __init__( self, imageName=defaultImageName, **kwargs ):
+    
+        if self.forceCustomFilenames == True:
+            imageName = self.useThisCustomFilename
     
         self.imageName = "{0}.png".format( str( imageName ).replace( "\\", "/" ).rsplit( '.', 1 )[0] )
         
@@ -97,8 +134,13 @@ class ImageStore:
         upload = checkInputs.checkBooleanKwargs( kwargs, False, 'u', 'upload', 'uploadImage' )
         if overrideUpload == True:
             upload = False
-        openImage = checkInputs.checkBooleanKwargs( kwargs, True, 'o', 'open', 'openImage', 'openUpload', 'openUploaded', 'openUploadImage', 'openUploadedImage' )
+        elif self.forceUpload == True:
+            upload = self.shouldUpload
             
+        openImage = checkInputs.checkBooleanKwargs( kwargs, True, 'o', 'open', 'openImage', 'openUpload', 'openUploaded', 'openUploadImage', 'openUploadedImage' )
+        if self.forceOpenOnUpload == True:
+            openImage = self.shouldOpenOnUpload
+        
         #If information should be disabled from being displayed
         disableInfo = checkInputs.checkBooleanKwargs( kwargs, False, 'd', 'disable', 'disableInfo', 'disableInformation' )
         
@@ -107,6 +149,11 @@ class ImageStore:
         
         #Final validation to read image that has just been created
         validateOutput = checkInputs.checkBooleanKwargs( kwargs, False, 'cO', 'vO', 'checkOutput', 'validateOutput', 'checkImage', 'validateImage' )
+        
+        #Delete file after creation
+        deleteImage = checkInputs.checkBooleanKwargs( kwargs, False, 'dI', 'deleteImage', 'removeImage', 'disableSaving', 'noSave', 'noSaving', 'uploadOnly' )
+        if self.forceDeleteFile == True:
+            deleteImage = self.shouldDeleteFile
         
         #Output all input data as black to debug
         debugData = checkInputs.checkBooleanKwargs( kwargs, False, 'debug', 'debugData', 'debugResult', 'debugOutput' )
@@ -167,9 +214,16 @@ class ImageStore:
             customImageInput = None
             customImageInputPath = ""
             
+            if self.forceCustomImages == True:
+                validArgs = ["forceCustomImages"]
+                kwargs["forceCustomImages"] = self.useThisCustomImage
+            
             for i in range( len( validArgs ) ):
             
                 try:
+                    if kwargs[validArgs[i]] == None:
+                        validArgs = []
+                        break
                     customImageInput = self.readImage( kwargs[validArgs[i]] )
                     if customImageInput != None:
                         customImageInputPath = kwargs[validArgs[i]]
@@ -352,6 +406,8 @@ class ImageStore:
                 else:
                     #Upload custom image and switch path to URL
                     uploadCustomImage = checkInputs.checkBooleanKwargs( kwargs, True, 'uI', 'uC', 'uO', 'uCI', 'uploadCustom', 'uploadOriginal', 'uploadCustomImage', 'uploadOriginalImage', 'uploadCustomURL', 'uploadOriginalURL' )
+                    if self.forceUpload == True:
+                        uploadCustomImage = self.shouldUpload
                     if uploadCustomImage == True and customImageInput != None and overrideUpload != True:
                         
                         #If it should upload any non imgur url to imgur
@@ -450,6 +506,7 @@ class ImageStore:
                 if self.printProgress == True:
                     if storedCutoffMode == invalidCutoffMode:
                         print "Calculating the best method to store data..."
+                        
                 totalPixelCount = 0
                 imageDimensions = customImageInput.size
                 imageSize = float( imageDimensions[0]*imageDimensions[1] )
@@ -467,7 +524,6 @@ class ImageStore:
                 
                         for rgb in range( 3 ):
                             rawData.append( pixels[rgb] )
-                            
                             if bestCutoffMode == None:
                                 #Count all valid values to find best cutoff mode
                                 if totalPixelCount > 0:
@@ -865,6 +921,15 @@ class ImageStore:
                     
             if self.printProgress == True:
                 print "Done."
+            
+            if deleteImage == True:
+                try:
+                    os.remove( self.imageName )
+                    outputList.pop( 0 )
+                except:
+                    pass
+                if len( outputList ) == 0:
+                    return None
             
             #Check the output
             if validateOutput == True:
@@ -1291,6 +1356,7 @@ class ImageStore:
         
         cachePath = "{0}/{1}".format( self.defaultCacheDirectory, self.defaultCacheName )
         
+              
         #Return the path
         returnPath = checkInputs.checkBooleanKwargs( kwargs, False, 'path', 'cachePath', 'loc', 'location', 'cacheLocation', 'returnPath', 'returnLoc', 'returnLocation' )
         if returnPath == True:
@@ -1368,6 +1434,29 @@ class ImageStore:
                             print "         Storage with {0} bits per pixel: {1}".format( bitsPerPixel, outputData[imageHash][1][cutoffMode][bitsPerPixel]*bitsPerPixel )   
                 print 
             
+            
+        #If the hash should be calculated
+        returnHash = checkInputs.checkBooleanKwargs( kwargs, False, 'h', 'hash', 'returnHash', 'calculateHash', 'imageHash', 'MD5', 'imageMD5' )
+        if returnHash == True:
+        
+            customImage = self.readImage( self.imageName )
+            
+            if customImage == None:
+                return None
+            
+            else:
+        
+                #Find md5 of image
+                imageHash = md5.new()
+                try:
+                    imageHash.update( customImage.tostring() )
+                except:
+                    pass
+                imageMD5 = imageHash.hexdigest()
+                
+                return imageMD5
+            
+            
         #Return the stored data
         return outputData
         
@@ -1375,22 +1464,21 @@ class ImageStore:
         
         location = str( location )
         
+        #Load from URL
         if any( value in location for value in self.protocols ):
-        
+                        
             try:
-                imageURL = cStringIO.StringIO( urllib2.urlopen( location ).read() )
-                return Image.open( imageURL )
+                location = cStringIO.StringIO( urllib2.urlopen( location ).read() )
                 
             except:
                 return None
-                
-        else:
         
-            try:
-                return Image.open( location )
-                
-            except:
-                return None
+        #Open image
+        try:
+            return Image.open( location ).convert( "RGB" )
+            
+        except:
+            return None
 
 #Compress into zip file
 class ImageStoreZip:
