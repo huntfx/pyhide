@@ -10,6 +10,7 @@ from time import time
 from datetime import datetime
 import cPickle, base64, urllib, cStringIO, os, pyimgur, webbrowser, zipfile, getpass, zlib, operator, re, math, md5, requests
 
+
 class ImageStore:
         
     pythonDirectory = os.getcwd().replace( "\\", "/" )
@@ -23,12 +24,13 @@ class ImageStore:
     defaultCacheDirectory = pythonDirectory
     defaultCacheName = "ImageStore.cache"
     
-    versionNumber = 0.3
+    versionNumber = "3.1"
     
-    outputProgressIterations = 2**16
-    outputProgressTime = 5
+    #For displaying the percentage
+    outputProgressIterations = 2**16 #Check time this many calculations
+    outputProgressTime = 5 #Output progress after this many seconds
     
-    maxCutoffModes = 7
+    maxCutoffModes = 7 #Keep at 7 unless you modify the validRange function, maximum possible is 8
     
     def __init__( self, imageName=defaultImageName, **kwargs ):
     
@@ -44,10 +46,13 @@ class ImageStore:
         if self.imageName[-1:] == "/":
             self.imageName += self.defaultImageName
         
-        self.printProgress = checkInputs.checkBooleanKwargs( kwargs, True, 'p', 'print', 'printProgress', 'printOutput' )
+        self.kwargs = kwargs
+        self.printProgress = checkInputs.checkBooleanKwargs( kwargs, True, 'p', 'print', 'printProgress', 'printOutput', 'o', 'output', 'outputProgress' )
         
         
     def write( self, input, **kwargs ):
+    
+        allOutputs = []
                 
         #If image should be uploaded
         upload = checkInputs.checkBooleanKwargs( kwargs, False, 'u', 'upload', 'uploadImage' )
@@ -72,109 +77,25 @@ class ImageStore:
         #Write image information to cache, can speed up code execution by a lot
         writeToINI = checkInputs.checkBooleanKwargs( kwargs, True, 'DB', 'INI', 'cache', 'writeDB', 'writeINI', 'writeCache', 'writeToDB', 'writeDatabase', 'writeToCache', 'writeToINI', 'writeToDatabase' )
         
+        #If the custom image option should be dynamically disabled or the code stopped
+        revertToDefault = checkInputs.checkBooleanKwargs( kwargs, True, 'revert', 'revertToDefault', 'revertToDefaultImage', 'revertToDefaultStyle' )
+        
         #Cutoff mode help
-        cutoffModeHelp = checkInputs.checkBooleanKwargs( kwargs, False, 'cMH', 'cMHelp', 'cutoffHelp', 'cutoffModeHelp' )
+        cutoffModeHelp = checkInputs.checkBooleanKwargs( kwargs, False, 'cH', 'cMH', 'cHelp', 'cMHelp', 'cutoffHelp', 'cutoffModeHelp' )
         if cutoffModeHelp == True:
             print "Cutoff modes:"
-            print "0: Move towards 0 (black)"
+            print "These define if the values should be added or subtracted based on the value of the pixel."
+            print "0: Move towards 0"
             print "1: Move towards 64"
             print "2: Move towards 128"
             print "3: Move towards 192"
-            print "4: Move towards 255 (white)"
+            print "4: Move towards 255"
+            print "5: Move away from 64"
+            print "6: Move away from 128"
+            print "7: Move away from 192"
             return None
         
-        #Custom cutoff mode
-        validArgs = checkInputs.validKwargs( kwargs, 'cM', 'cutoff', 'cutoffMode' )
-        customCutoffMode = None
-        validCustomCutoffModes = []
-        for i in range( len( validArgs ) ):
-            try:
-                if "," in str( kwargs[validArgs[i]] ) or type( kwargs[validArgs[i]] ) == tuple:
-                
-                    #If provided as tuple
-                    if type( kwargs[validArgs[i]] ) == tuple:
-                        customModeList = kwargs[validArgs[i]]
-                                
-                    #If provided as string
-                    else:
-                        customModeList = kwargs[validArgs[i]].replace( "(", "" ).replace( ")", "" ).split( "," )
-                               
-                    #Build list of all values
-                    for j in range( len( customModeList ) ):
-                        try:
-                            customCutoffMode = int( customModeList[j] )
-                            if 0 < customCutoffMode < self.maxCutoffModes+1:
-                                validCustomCutoffModes.append( customCutoffMode )
-                        except:
-                            customCutoffMode = None
-                            
-                    if len( validCustomCutoffModes ) > 0:
-                        break
-                    
-                else:
-                    customCutoffMode = int( kwargs[validArgs[i]] )
-                    if 0 < customCutoffMode < self.maxCutoffModes+1:
-                        break
-                    else:
-                        customCutoffMode = None
                         
-            except:
-                customCutoffMode = None
-        
-        #Run code on final cutoff number
-        if len( validCustomCutoffModes ) > 0:
-            customCutoffMode = validCustomCutoffModes[-1]
-        
-        #If image should be output with all cutoff modes
-        allCutoffModes = checkInputs.checkBooleanKwargs( kwargs, False, 'a', 'all', 'aCM', 'allCutoff', 'allCutoffs', 'allModes', 'allCutoffMode', 'allCutoffModes' )
-        allOutputs = []
-        
-        #Automatically set custom cutoff modes to all
-        if allCutoffModes == True:
-            validCustomCutoffModes = list( range( self.maxCutoffModes+1 ) )
-        
-        
-        #Avoid running code again if it's already recursive
-        usingCustomModesAlready = checkInputs.checkBooleanKwargs( kwargs, False, 'usingCustomModesAlready' )
-        if usingCustomModesAlready == False:
-        
-            validCustomCutoffModes.sort()
-            kwargs["usingCustomModesAlready"] = True
-            
-            #Run code again for each cutoff mode
-            for i in range( len( validCustomCutoffModes )-1 ):
-            
-                kwargs["useThisInstead"] = validCustomCutoffModes[i]
-                
-                newImageName = self.imageName.replace( ".png", "" ) + ".m" + str( validCustomCutoffModes[i] ) + ".png"
-                otherURLS = ImageStore( newImageName ).write( input, **kwargs )
-                if otherURLS != None:
-                    allOutputs += otherURLS
-            
-            self.imageName = self.imageName.replace( ".png", "" ) + ".m" + str( validCustomCutoffModes[-1] ) + ".png"
-        
-        else:
-            customCutoffMode = kwargs["useThisInstead"]
-            
-            
-        '''
-        if allCutoffModes == True:
-            try:
-                customCutoffMode = kwargs['allCutoffModesNum'] + 1
-            except:
-                customCutoffMode = 0
-            kwargs['allCutoffModesNum'] = customCutoffMode
-            self.imageName = self.imageName.replace( ".png", "" ).replace( ".CM" + str( customCutoffMode-1 ), "" ) + ".CM" + str( customCutoffMode ) + ".png"
-            
-            if customCutoffMode < self.maxCutoffModes:
-                otherURLS = ImageStore( self.imageName ).write( input, **kwargs )
-                if otherURLS != None:
-                    allOutputs += otherURLS
-                    
-            else:
-                customCutoffMode = self.maxCutoffModes
-            '''
-            
         #Ratio of width to height
         validArgs = checkInputs.validKwargs( kwargs, 'r', 'ratio', 'sizeRatio', 'widthRatio', 'heightRatio', 'widthToHeightRatio' )
         ratioWidth = math.log( 1920 ) / math.log( 1920*1080 )
@@ -222,7 +143,85 @@ class ImageStore:
                 sizeOfImage = customImageInput.size
                 #Keep same size ratio if image can't hold all the data
                 ratioWidth = math.log( sizeOfImage[0] ) / math.log( sizeOfImage[0]*sizeOfImage[1] )
-             
+            
+            
+                #Custom cutoff mode
+                validArgs = checkInputs.validKwargs( kwargs, 'cM', 'mode', 'cutoff', 'cutoffMode', 'cutoffModes' )
+                customCutoffMode = None
+                validCustomCutoffModes = []
+                for i in range( len( validArgs ) ):
+                    try:
+                        if "," in str( kwargs[validArgs[i]] ) or type( kwargs[validArgs[i]] ) == tuple:
+                        
+                            #If provided as tuple
+                            if type( kwargs[validArgs[i]] ) == tuple:
+                                customModeList = kwargs[validArgs[i]]
+                                        
+                            #If provided as string
+                            else:
+                                customModeList = kwargs[validArgs[i]].replace( "(", "" ).replace( ")", "" ).split( "," )
+                                       
+                            #Build list of all values
+                            for j in range( len( customModeList ) ):
+                                try:
+                                    customCutoffMode = int( customModeList[j] )
+                                    if 0 < customCutoffMode < self.maxCutoffModes+1:
+                                        validCustomCutoffModes.append( customCutoffMode )
+                                except:
+                                    customCutoffMode = None
+                                    
+                            if len( validCustomCutoffModes ) > 0:
+                                break
+                            
+                        else:
+                            customCutoffMode = int( kwargs[validArgs[i]] )
+                            if 0 < customCutoffMode < self.maxCutoffModes+1:
+                                break
+                            else:
+                                customCutoffMode = None
+                                
+                    except:
+                        customCutoffMode = None
+                
+                #Run code on final cutoff number
+                if len( validCustomCutoffModes ) > 0:
+                    customCutoffMode = validCustomCutoffModes[-1]
+                
+                #If image should be output with all cutoff modes
+                allCutoffModes = checkInputs.checkBooleanKwargs( kwargs, False, 'a', 'all', 'aCM', 'allCutoff', 'allCutoffs', 'allModes', 'allCutoffMode', 'allCutoffModes' )
+                
+                #Automatically set custom cutoff modes to all
+                if allCutoffModes == True:
+                    validCustomCutoffModes = list( range( self.maxCutoffModes+1 ) )
+                
+                
+                #Avoid running code again if it's already recursive
+                usingCustomModesAlready = checkInputs.checkBooleanKwargs( kwargs, False, 'usingCustomModesAlready' )
+                if usingCustomModesAlready == False:
+                
+                    validCustomCutoffModes.sort()
+                    kwargs["usingCustomModesAlready"] = True
+                    
+                    #Run code again for each cutoff mode
+                    for i in range( len( validCustomCutoffModes )-1 ):
+                    
+                        kwargs["useThisInstead"] = validCustomCutoffModes[i]
+                        
+                        newImageName = self.imageName.replace( ".png", "" ) + ".m" + str( validCustomCutoffModes[i] ) + ".png"
+                        otherURLS = ImageStore( newImageName, **self.kwargs ).write( input, **kwargs )
+                        if otherURLS != None:
+                            allOutputs += otherURLS
+                    
+                    if len( validCustomCutoffModes ) > 1:
+                    
+                        #Set up name and cutoff mode for final run
+                        self.imageName = self.imageName.replace( ".png", "" ) + ".m" + str( validCustomCutoffModes[-1] ) + ".png"
+                        customCutoffMode = validCustomCutoffModes[-1]
+                    
+                else:
+                    customCutoffMode = kwargs["useThisInstead"]
+            
+            
             #Test custom image to see if it exists, return True or False
             validArgs = checkInputs.validKwargs( kwargs, 't', 'tI', 'tCI', 'testImage', 'testURL', 'testImageURL', 'testImageLocation', 'testCustomImage', 'testCustomImageURL', 'testCustomImageLocation' )
             canReadCustomImage = False
@@ -376,22 +375,27 @@ class ImageStore:
                 cutoffModeAmount[i] = 0
                 colourRange[i] = self.validRange( i, bitsPerPixel )
                 validPixels[i] = {}
-            validPixels[i+1] = {}
             
             #Read valid pixels dictionary from cache
-            if successfulRead == True:
+            if successfulRead == True and ( 0 <= storedCutoffMode <= self.maxCutoffModes ):
                 validPixels = storedValidPixels
+                bestCutoffMode = storedCutoffMode
             else:
+                bestCutoffMode = None
                 storedCutoffMode = invalidCutoffMode
+            print storedCutoffMode
+            return
                 
             #Use custom set cutoff mode
             if customCutoffMode != None:
                 storedCutoffMode = customCutoffMode
             
-            if successfulRead == False or len( validPixels[storedCutoffMode] ) == 0:
+            if successfulRead == False or len( validPixels[storedCutoffMode] ) == 0 or bestCutoffMode == None:
 
                 #Calculate max data that can be stored
-                print "Calculating the best method to store data..."
+                if self.printProgress == True:
+                    if storedCutoffMode == invalidCutoffMode:
+                        print "Calculating the best method to store data..."
                 totalPixelCount = 0
                 imageDimensions = customImageInput.size
                 imageSize = float( imageDimensions[0]*imageDimensions[1] )
@@ -410,7 +414,7 @@ class ImageStore:
                         for rgb in range( 3 ):
                             rawData.append( pixels[rgb] )
                             
-                            if storedCutoffMode == invalidCutoffMode:
+                            if bestCutoffMode == None:
                                 #Count all valid values to find best cutoff mode
                                 if totalPixelCount > 0:
                                     for i in cutoffModes:
@@ -420,8 +424,9 @@ class ImageStore:
                     totalPixelCount += 1
                     
                 #Select best cutoff mode
-                if storedCutoffMode == invalidCutoffMode:
-                    cutoffMode = max( cutoffModeAmount.iteritems(), key=operator.itemgetter( 1 ) )[0]
+                if bestCutoffMode == None:
+                    bestCutoffMode = max( cutoffModeAmount.iteritems(), key=operator.itemgetter( 1 ) )[0]
+                    cutoffMode = bestCutoffMode
                 else:
                     cutoffMode = storedCutoffMode
                                                 
@@ -502,7 +507,18 @@ class ImageStore:
             
                 if bitsPerPixel > 7:
                     if self.printProgress == True:
-                        print "Error: Image not big enough to store data. Disabling the custom image option."
+                        outputText = "Error: Image not big enough to store data."
+                        
+                    #Stop code here if reverting to default isn't an option
+                    if revertToDefault == False:
+                        if self.printProgress == True:
+                            print outputText
+                        return None
+                    else:
+                        outputText += " Disabling the custom image option."
+                        if self.printProgress == True:
+                            print outputText
+                    
                     useBinary = False
                     inputData = self.encodeData( input, binary = useBinary )
                     
@@ -513,7 +529,7 @@ class ImageStore:
             
             #Write to ini file
             if writeToINI == True:
-                textFileData[imageMD5] = [cutoffMode, validPixels, customImageInputPath]
+                textFileData[imageMD5] = [bestCutoffMode, validPixels, customImageInputPath]
                 textFile.write( self.encodeData( textFileData, encode = True ) )
                 textFile.close()
             
@@ -1075,23 +1091,75 @@ class ImageStore:
             colourMaxIncrease = cutoffMode*64-cutoffRange-1
             colourMaxReduce = 255
             colourMinReduce = cutoffMode*64+cutoffRange
-        else:
+        elif cutoffMode < 8:
             cutoffMode -= 4
             colourMinIncrease = cutoffMode*64
             colourMaxIncrease = 255-cutoffRange
             colourMinReduce = cutoffRange
             colourMaxReduce = cutoffMode*64-1
+        else:
+            colourMinIncrease = 0
+            colourMaxIncrease = -1
+            colourMinReduce = 255
+            colourMaxReduce = 254
         
         colourIncreaseRange = range( colourMinIncrease, colourMaxIncrease+1 )
         colourReduceRange = range( colourMinReduce, colourMaxReduce+1 )
         
         return colourIncreaseRange, colourReduceRange
         
-    def cache( self ):
+    def cache( self, **kwargs ):
+        
+        #Delete the cache file
+        cleanCache = checkInputs.checkBooleanKwargs( kwargs, False, 'c', 'clean', 'cleanCache', 'delCache', 'deleteCache' )
+        if cleanCache == True:
+            try:
+                os.remove( self.defaultCacheDirectory + "/" + self.defaultCacheName )
+            except:
+                pass
+        
+        #Open file and decode data
         try:
-            return self.decodeData( open( self.defaultCacheDirectory + "/" + self.defaultCacheName, "r").read(), decode = True )
+            textFile = open( self.defaultCacheDirectory + "/" + self.defaultCacheName, "r")
         except:
             return None
+        try:
+            outputData = self.decodeData( textFile.read(), decode = True )
+        except:
+            outputData = None
+        textFile.close()
+        
+        #Delete individual value
+        if outputData != None:
+            validArgs = checkInputs.validKwargs( kwargs, 'delValue', 'delKey', 'deleteValue', 'deleteKey', 'removeValue', 'removeKey' )
+            deleteValue = None
+            for i in range( len( validArgs ) ):
+                outputData.pop( kwargs[validArgs[i]], None )
+                
+            #Write back to cache
+            try:
+                textFile = open( self.defaultCacheDirectory + "/" + self.defaultCacheName, "w")
+                textFile.write( self.encodeData( outputData, encode = True ) )
+                textFile.close()
+            except:
+                pass
+            
+            #Return single value
+            validArgs = checkInputs.validKwargs( kwargs, 'k', 'v', 'key', 'value' )
+            keyValue = None
+            for i in range( len( validArgs ) ):
+                try:
+                    keyValue = outputData[kwargs[validArgs[i]]]
+                    break
+                except:
+                    keyValue = None
+                    
+            if len( validArgs ) > 0:
+                return keyValue
+                
+            
+        #Return the stored data
+        return outputData
         
     def readImage( self, location ):
         
