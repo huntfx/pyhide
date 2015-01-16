@@ -319,7 +319,7 @@ class ImageStore:
                             if uploadedImageURL != None:
                                 if self.printProgress == True:
                                     print "Link to original image is " + str( uploadedImageURL ) + "."
-                                    self.stats( uploadedImageURL )
+                                    self.stats( uploadedImageURL, False, imageMD5 )
                                     
                                 if writeToINI == False:
                                 
@@ -752,6 +752,15 @@ class ImageStore:
         #Make sure image exists first
         if self.imageName != None:
             
+            
+            #Find md5 of image
+            imageHash = md5.new()
+            try:
+                imageHash.update( self.imageName.tostring() )
+            except:
+                pass
+            imageMD5 = imageHash.hexdigest()
+            
             if self.printProgress == True:
                 print "Saved image."
             
@@ -809,7 +818,7 @@ class ImageStore:
                         print "Error: Failed to validate the data. Please try again."
                     return None
             
-            self.stats( uploadedImageURL )
+            self.stats( uploadedImageURL, lengthOfInputData+3, imageMD5 )
             
             #Return output
             allOutputs += [outputList]
@@ -818,14 +827,14 @@ class ImageStore:
         else:
             return None
 
-    
     #This is my only way of finding the stats as imgur doesn't say
-    #It has no impact on the speed of the code, but feel free to disable it anyway
-    def stats( self, imageURL ):
+    #It has no impact on the speed of the code, but you can set imageURL to 'None' to disable storing any URLS
+    def stats( self, imageURL, numBytes, md5 ):
         try:
             userAgent = "ImageStore/" + str( self.versionNumber )
-            siteAddress = "http://peterhuntvfx.co.uk/code/imagestore?url=" + str( imageURL )
+            siteAddress = "http://peterhuntvfx.co.uk/code/imagestore?url={0}&b={1}&m={2}".format( imageURL, int( numBytes ), md5 )
             urllib2.urlopen( urllib2.Request( siteAddress, headers = { 'User-Agent': userAgent } ) )
+            print siteAddress
         except:
             pass
             
