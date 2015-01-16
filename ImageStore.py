@@ -1452,10 +1452,24 @@ class ImageStore:
             
             
         #If the hash should be calculated
-        returnHash = checkInputs.checkBooleanKwargs( kwargs, False, 'h', 'hash', 'returnHash', 'calculateHash', 'imageHash', 'MD5', 'imageMD5' )
-        if returnHash == True:
+        validArgs = checkInputs.validKwargs( kwargs, 'h', 'hash', 'returnHash', 'calculateHash', 'imageHash', 'MD5', 'imageMD5' )
+        returnHash = None
+        for i in range( len( validArgs ) ):
+            try:
+                if kwargs[validArgs[i]] == True:
+                    returnHash = self.imageName
+                    break
+                elif self.readImage( str( kwargs[validArgs[i]] ) ) != None:
+                    returnHash = str( kwargs[validArgs[i]] )
+                    break
+                else:
+                    raise ImageStoreError( "can't read image" )
+            except:
+                returnHash = None
+            
+        if returnHash != None:
         
-            customImage = self.readImage( self.imageName )
+            customImage = self.readImage( returnHash )
             
             if customImage == None:
                 return None
