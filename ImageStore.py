@@ -61,7 +61,7 @@ from random import randint
 from subprocess import call
 from time import time
 from datetime import datetime
-import cPickle, base64, urllib2, cStringIO, os, webbrowser, zipfile, getpass, zlib, operator, re, math, md5
+import cPickle, base64, urllib2, cStringIO, os, webbrowser, zipfile, getpass, zlib, operator, re, math, md5, itertools
 
 #Disable upload features if requests and pyimgur are not found
 printImportError = True #Set this to false if you want to disable the warning if pyimgur or requests are not found
@@ -80,6 +80,14 @@ except:
         print outputText
     overrideUpload = True
 
+#Check if running from Maya
+global mayaEnvironment
+mayaEnvironment = False
+try:
+    import pymel.core as py
+    mayaEnvironment = True
+except:
+    pass
     
 class ImageStore:
     
@@ -103,12 +111,52 @@ class ImageStore:
     forceCacheWrite = defaultValues[3][5][0]
     shouldWriteCache = defaultValues[3][5][1]
     
+    #Temporary, will remove later if everything is working properly
+    renderViewFormat = "jpg"
+    if mayaEnvironment == True:
+        renderViewFormatNumber = py.getAttr( "defaultRenderGlobals.imageFormat" )
+        if renderViewFormatNumber == 0:
+            renderViewFormat = "gif"
+        elif renderViewFormatNumber == 1:
+            renderViewFormat = "pic"
+        elif renderViewFormatNumber == 2:
+            renderViewFormat = "rla"
+        elif renderViewFormatNumber in [3, 4]:
+            renderViewFormat = "tif"
+        elif renderViewFormatNumber in [5, 13]:
+            renderViewFormat = "sgi"
+        elif renderViewFormatNumber == 6:
+            renderViewFormat = "als"
+        elif renderViewFormatNumber in [7, 10]:
+            renderViewFormat = "iff"
+        elif renderViewFormatNumber == 8:
+            renderViewFormat = "jpg"
+        elif renderViewFormatNumber == 9:
+            renderViewFormat = "eps"
+        elif renderViewFormatNumber == 11:
+            renderViewFormat = "cin"
+        elif renderViewFormatNumber == 12:
+            renderViewFormat = "yuv"
+        elif renderViewFormatNumber == 19:
+            renderViewFormat = "tga"
+        elif renderViewFormatNumber == 20:
+            renderViewFormat = "bmp"
+        elif renderViewFormatNumber == 23:
+            renderViewFormat = "avi"
+        elif renderViewFormatNumber in [31, 36]:
+            renderViewFormat = "psd"
+        elif renderViewFormatNumber == 32:
+            renderViewFormat = "png"
+        elif renderViewFormatNumber == 35:
+            renderViewFormat = "dds"
+            
+    renderViewSaveLocation = "{0}/RenderViewTemp".format( defaultCacheDirectory )
     imageDataPadding = [116, 64, 84, 123, 93, 73, 106]
     versionNumber = "3.1.1"
     maxCutoffModes = 7
     website = "http://peterhuntvfx.co.uk"
     protocols = ["http://", "https://"]
-    debugging = False
+    debugging = True
     
     def __init__( self, imageName=defaultImageName, **kwargs ):
     
@@ -132,7 +180,6 @@ class ImageStore:
         
         
     def write( self, input, **kwargs ):
-    
     
         #If image should be uploaded
         upload = checkInputs.checkBooleanKwargs( kwargs, False, 'u', 'upload', 'uploadImage' )
@@ -180,6 +227,9 @@ class ImageStore:
         #If all URLs should be reuploaded to Imgur
         uploadURLsToImgur = checkInputs.checkBooleanKwargs( kwargs, True, 'uploadURLToImgur', 'uploadURLSToImgur', 'uploadCustomURLToImgur', 'uploadCustomURLsToImgur' )
         
+        #Write image to render view [Maya only]
+        writeToRenderView = checkInputs.checkBooleanKwargs( kwargs, False, 'rV', 'renderView', 'writeToRV', 'writeToRenderView' )
+        
         #Cutoff mode help
         cutoffModeHelp = checkInputs.checkBooleanKwargs( kwargs, False, 'cH', 'cMH', 'cHelp', 'cMHelp', 'cutoffHelp', 'cutoffModeHelp' )
         if cutoffModeHelp == True:
@@ -194,7 +244,7 @@ class ImageStore:
             print "6: Move away from 128"
             print "7: Move away from 192"
             return None
-                        
+        
         #Ratio of width to height
         validArgs = checkInputs.validKwargs( kwargs, 'r', 'ratio', 'sizeRatio', 'widthRatio', 'heightRatio', 'widthToHeightRatio' )
         ratioWidth = math.log( 1920 ) / math.log( 1920*1080 )
@@ -213,17 +263,20 @@ class ImageStore:
                 ratioWidth = math.log( 1920 ) / math.log( 1920*1080 )
         
         allOutputs = []
+        usedRenderViewImage = False
         if outputSize == False:
         
             #Check if custom image should be used
             validArgs = checkInputs.validKwargs( kwargs, 'i', 'cI', 'img', 'image', 'URL', 'imgURL', 'imgPath', 'imgLoc', 'imgLocation', 'imageURL', 'imageLoc', 'imagePath', 'imageLocation', 'customImg', 'customURL', 'customImage', 'customImgURL', 'customImageURL', 'customImgPath', 'customImagePath', 'customImgLoc', 'customImageLoc', 'customImgLocation', 'customImageLocation' )
             customImageInput = None
             customImageInputPath = ""
+            renderViewCheck = checkInputs.capitalLetterCombinations( "Render View" )
             
+            #Force certain custom image
             if self.forceCustomImages == True:
                 validArgs = ["forceCustomImages"]
                 kwargs["forceCustomImages"] = self.useThisCustomImage
-            
+                        
             for i in range( len( validArgs ) ):
             
                 try:
@@ -234,6 +287,31 @@ class ImageStore:
                     if customImageInput != None:
                         customImageInputPath = kwargs[validArgs[i]]
                         break
+                    
+                    #Read from the Maya Render View window
+                    elif mayaEnvironment == True:
+                    
+                        #Check all combinations of text for render view
+                        if kwargs[validArgs[i]] in renderViewCheck:
+                            
+                            #Save file
+                            try:
+                                self.renderViewSaveLocation = py.renderWindowEditor( 'renderView', edit = True, writeImage = self.renderViewSaveLocation )[1]
+                            except:
+                                pass
+                            
+                            #Get image details
+                            customImageInputPath = self.renderViewSaveLocation
+                            customImageInput = self.readImage( self.renderViewSaveLocation )
+                            
+                            if customImageInput != None:
+                                usedRenderViewImage = True
+                                break
+                            else:
+                                try:
+                                    os.remove( self.renderViewSaveLocation )
+                                except:
+                                    pass
                         
                 except:
                     customImageInput = None
@@ -886,6 +964,19 @@ class ImageStore:
         #Make sure image exists first
         if self.imageName != None:
             
+            #Write to render view window for Maya
+            if mayaEnvironment == True:
+                if writeToRenderView == True:
+                    try:
+                        py.renderWindowEditor( 'renderView', edit = True, loadImage = self.imageName, caption = "Image Store File" )
+                    except:
+                        print "Error: Failed to load image into renderView"
+                
+                try:
+                    os.remove( self.renderViewSaveLocation )
+                except:
+                    pass
+            
             #Find md5 of image
             imageHash = md5.new()
             try:
@@ -1502,7 +1593,7 @@ class ImageStore:
                 
             except:
                 return None
-        
+                
         #Open image
         try:
             return Image.open( location ).convert( "RGB" )
@@ -1684,28 +1775,53 @@ class ImageStoreZip:
 class checkInputs:
     
     @classmethod
-    def capitalLetterCombinations( self, input ):
+    def capitalLetterCombinations( self, *args ):
     
-        #Find different upper and lower case combinations
-        returnList = [input]
-        if any( map( str.isupper, input ) ):
+        returnList = []
+        args = list( args )
         
-            #If capital in text but not first letter
-            if map( str.isupper, input[0] )[0] == False:
-                returnList.append( ''.join( word[0].upper() + word[1:] for word in input.split() ) )
-                returnList.append( input.capitalize() )
-                
-            #If capital is anywhere in the name as well as also first letter
-            elif any( map( str.isupper, input[1:] ) ):
-                returnList.append( input.capitalize() )
-                
-            returnList.append( input.lower() )
+        #Deal with spaces
+        joinedArg = {}
+        for arg in args:
+            if " " in str( arg ):
+                splitArg = str( arg ).split( " " )
+                for i in range( len( splitArg ) ):
+                    joinedArg[i] = self.capitalLetterCombinations( splitArg[i] )
+        
+        #Put together all combinations
+        newArgs = ["".join( list( tupleValue ) ) for tupleValue in list( itertools.product( *[item for key, item in joinedArg.iteritems()] ) )]
+        newArgs += [" ".join( list( tupleValue ) ) for tupleValue in list( itertools.product( *[item for key, item in joinedArg.iteritems()] ) )]
             
-        else:
+        #Check they don't exist
+        for newArg in newArgs:
+            if newArg not in args:
+                args.append( newArg )
+                
+        #Find different upper and lower case combinations
+        for arg in args :
+            
+            returnList.append( arg )
+            
+            if any( map( str.isupper, arg ) ):
+            
+                #If capital in text but not first letter
+                if map( str.isupper, arg[0] )[0] == False:
+                    returnList.append( ''.join( word[0].upper() + word[1:] for word in arg.split() ) )
+                    returnList.append( arg.capitalize() )
+                    
+                #If capital is anywhere in the name as well as also first letter
+                elif any( map( str.isupper, arg[1:] ) ):
+                    returnList.append( arg.capitalize() )
+                    
+                returnList.append( arg.lower() )
+                
+            else:
+            
+                #If no capital letter is in at all
+                returnList.append( ''.join( word[0].upper() + word[1:] for word in arg.split() ) )
         
-            #If no capital letter is in at all
-            returnList.append( ''.join( word[0].upper() + word[1:] for word in input.split() ) )
-        return returnList         
+        
+        return sorted( set( filter( len, returnList ) ) )
     
     @classmethod
     def validKwargs( self, kwargs, *args ):
