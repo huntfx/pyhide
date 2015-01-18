@@ -6,45 +6,6 @@ It can be uploaded anywhere and read from other computers as long as it stays as
 
 <br>
 
-<h4>Updates:</h4>
-
-v1:
-Manually wrote all the parts aside from the image library. Amazingly slow with any large amounts of data.
-
-v2:
-Entirely rewrote to use built in functions for a lot of the conversion. Very lightweight and relatively fast.
-
-v2.1
-Added support for imgur, so you may set the code to upload the image, or read any image but putting the URL as the file path.
-
-v2.2:
-Added in support to store files within the image, in preperation for custom images. 
-
-v3:
-Rewrote the code again to give the ability to use custom images. 
-By default this initial image will be uploaded and URL stored in the file, so it can be read without any extra user input.
-
-Custom images will take longer, as it'll decide the best and most efficient way to store the data.
-It will cache a small amount of information about an image after the first run, which on a 1080p image for example, equates to 50 million less calculations, or 9 billion fewer list lookups, so makes things quite a bit faster.
-The incorrect padding error should also be fully fixed now, and trying to store more data than an image can handle will revert to the basic method, but keep the same aspect ratio of the custom image.
-
-v3.1
-Input data is now compressed, and progress is output every few seconds as calculations can take a while.
-Added more cutoff modes, the option to use multiple cutoff modes, and another value that can be set to true to automatically use them all.
-The cache is now fixed to store each cutoff mode separately, instead of just the first one.
-
-v3.1.1
-Wrote some code to track stats, and cleaned up a lot of the URL checking.
-Added in debugging for reading images, it can display the first x decoded characters (any amount but 100 by default) and various other information about the image.
-If pyimgur or requests are not found, instead of throwing an error, it will just disable the upload capabilities and continue as normal.
-
-v3.1.2
-Made it a lot easier to force default values, which could be useful in an application.
-Putting a URL as the save path will attempt to use it as a custom image instead of throwing an error, and the cache function can return the hash of an image, to make it easier to locate in the cache.
-Fixed various other bugs such as black and white images crashing the code.
-
-<br>
-
 <h4>Installation:</h4>
 Copy ImageStore.py with the PIL, requests and pyimgur folders into your Python directory.<br>
 Alternatively, you may add a new search path to any location through the following method, but it must be run each time Python is loaded.
@@ -103,6 +64,13 @@ Load up imageStore.py and you can change the default save location of files and 
 	#Save 7 versions of the image with all the different cutoff modes (for use if the output image has some banding, another mode may fix it)
 	ImageStore().write( infoToStore, allCutoffModes = True )
      
+<br>
+
+<h4>Maya Specific Usage:</h4>
+
+	#Use the current render view image as a custom image
+	ImageStore().write( infoToStore, customImage = "RenderView" )
+
 <br>
 
 <h4>All Commands:</h4>
@@ -196,8 +164,25 @@ Load up imageStore.py and you can change the default save location of files and 
     			 - Will read the output image to make sure the data exactly matches the input.
     			 - May slow down execution time if enabled.
     				Default: False
+
+			returnURL/returnCustomURL
+			 - Add the custom image URL to the output list.
+			 - Not added by default as it'll be ImageStore().write()[1] without uploading the output image, or ImageStore().write()[2] if you do.
+			 - This is stored in the file anyway, so shouldn't really be needed
     
     
+			#MAYA
+
+			i/c/image/customImage
+			 - String
+			 - Same as above, but set to "RenderView" to use the image in the renderView window
+
+			rV/renderView/writeToRenderView
+			 - True/False
+			 - Will load the output image into the renderView window.
+			 - Currently not working as Maya seems to convert the image.
+			 
+			 
     			#DEBUGGING
     
     			debug/debugResult/debugOutput
@@ -225,9 +210,8 @@ Load up imageStore.py and you can change the default save location of files and 
     			 - String
     			 - Return True/False depending on if custom image can be read from the path/URL.
     				Default: None
-    
-    
-    
+    				
+    				
     		If image was saved:
     			Return [[Path to image, (image url if uploaded) ], (same if multiple images were created)]
     		If error in saving image:
@@ -348,6 +332,51 @@ However, with the introduction of custom images, it got a bit more complicated:
   These values can then be converted back into numbers, to be added or subtracted from the existing pixels, based on the cutoff mode.
 
 Reading the image simply reverses the process, but it requires every pixel to be exactly the same or it won't be able to decode the data.
+
+<br>
+
+<h4>Updates:</h4>
+
+v1:
+Manually wrote all the parts aside from the image library. Amazingly slow with any large amounts of data.
+
+v2:
+Entirely rewrote to use built in functions for a lot of the conversion. Very lightweight and relatively fast.
+
+v2.1
+Added support for imgur, so you may set the code to upload the image, or read any image but putting the URL as the file path.
+
+v2.2:
+Added in support to store files within the image, in preperation for custom images. 
+
+v3:
+Rewrote the code again to give the ability to use custom images. 
+By default this initial image will be uploaded and URL stored in the file, so it can be read without any extra user input.
+
+Custom images will take longer, as it'll decide the best and most efficient way to store the data.
+It will cache a small amount of information about an image after the first run, which on a 1080p image for example, equates to 50 million less calculations, or 9 billion fewer list lookups, so makes things quite a bit faster.
+The incorrect padding error should also be fully fixed now, and trying to store more data than an image can handle will revert to the basic method, but keep the same aspect ratio of the custom image.
+
+v3.1
+Input data is now compressed, and progress is output every few seconds as calculations can take a while.
+Added more cutoff modes, the option to use multiple cutoff modes, and another value that can be set to true to automatically use them all.
+The cache is now fixed to store each cutoff mode separately, instead of just the first one.
+
+v3.1.1
+Wrote some code to track stats, and cleaned up a lot of the URL checking.
+Added in debugging for reading images, it can display the first x decoded characters (any amount but 100 by default) and various other information about the image.
+If pyimgur or requests are not found, instead of throwing an error, it will just disable the upload capabilities and continue as normal.
+
+v3.1.2
+
+Made it a lot easier to force default values, which could be useful in an application.
+
+Putting a URL as the save path will attempt to use it as a custom image instead of throwing an error, and the cache function can return the hash of an image, to make it easier to locate in the cache.
+
+Fixed various other bugs such as black and white images crashing the code.
+
+v3.1.2
+Added in Maya specific code to use the render view window.
 
 <br>
 
