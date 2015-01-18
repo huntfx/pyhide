@@ -1,7 +1,7 @@
 '''
 Author: Peter Hunt
 Website: peterhuntvfx.co.uk
-Version: 3.1.2
+Version: 3.1.3
 '''
 
 #You can edit these values, but they lack error checking so be careful
@@ -110,76 +110,60 @@ class ImageStore:
     shouldDeleteFile = defaultValues[3][4][1]
     forceCacheWrite = defaultValues[3][5][0]
     shouldWriteCache = defaultValues[3][5][1]
-    
-    #Temporary, will remove later if everything is working properly
-    renderViewFormat = "jpg"
-    if mayaEnvironment == True:
-        renderViewFormatNumber = py.getAttr( "defaultRenderGlobals.imageFormat" )
-        if renderViewFormatNumber == 0:
-            renderViewFormat = "gif"
-        elif renderViewFormatNumber == 1:
-            renderViewFormat = "pic"
-        elif renderViewFormatNumber == 2:
-            renderViewFormat = "rla"
-        elif renderViewFormatNumber in [3, 4]:
-            renderViewFormat = "tif"
-        elif renderViewFormatNumber in [5, 13]:
-            renderViewFormat = "sgi"
-        elif renderViewFormatNumber == 6:
-            renderViewFormat = "als"
-        elif renderViewFormatNumber in [7, 10]:
-            renderViewFormat = "iff"
-        elif renderViewFormatNumber == 8:
-            renderViewFormat = "jpg"
-        elif renderViewFormatNumber == 9:
-            renderViewFormat = "eps"
-        elif renderViewFormatNumber == 11:
-            renderViewFormat = "cin"
-        elif renderViewFormatNumber == 12:
-            renderViewFormat = "yuv"
-        elif renderViewFormatNumber == 19:
-            renderViewFormat = "tga"
-        elif renderViewFormatNumber == 20:
-            renderViewFormat = "bmp"
-        elif renderViewFormatNumber == 23:
-            renderViewFormat = "avi"
-        elif renderViewFormatNumber in [31, 36]:
-            renderViewFormat = "psd"
-        elif renderViewFormatNumber == 32:
-            renderViewFormat = "png"
-        elif renderViewFormatNumber == 35:
-            renderViewFormat = "dds"
-            
-    renderViewSaveLocation = "{0}/RenderViewTemp".format( defaultCacheDirectory )
+                
     imageDataPadding = [116, 64, 84, 123, 93, 73, 106]
-    versionNumber = "3.1.1"
+    firstPixelPadding = [92, 101]
+    versionNumber = "3.1.3"
     maxCutoffModes = 7
     website = "http://peterhuntvfx.co.uk"
     protocols = ["http://", "https://"]
-    debugging = True
+    debugging = False
+    
+    #Maya
+    renderViewSaveLocation = "{0}/RenderViewTemp".format( defaultCacheDirectory )
+    renderViewCaption = "Image Store Output"
     
     def __init__( self, imageName=defaultImageName, **kwargs ):
     
         if self.forceCustomFilenames == True:
             imageName = self.useThisCustomFilename
+        
+        self.imageName = imageName
+        self.renderViewCheck = checkInputs.capitalLetterCombinations( "Render View" )
+        if self.imageName not in self.renderViewCheck or mayaEnvironment == False:
     
-        self.imageName = "{0}.png".format( str( imageName ).replace( "\\", "/" ).rsplit( '.', 1 )[0] )
-        
-        if "/" not in self.imageName:
-            self.imageName = "{0}/{1}".format( self.defaultImageDirectory, self.imageName )
+            self.imageName = "{0}.png".format( str( imageName ).replace( "\\", "/" ).rsplit( '.', 1 )[0] )
             
-        if self.imageName[-1:] == ":":
-            self.imageName += "/"
-            
-        if self.imageName[-1:] == "/":
-            self.imageName += self.defaultImageName
-        
+            if "/" not in self.imageName:
+                self.imageName = "{0}/{1}".format( self.defaultImageDirectory, self.imageName )
+                
+            if self.imageName[-1:] == ":":
+                self.imageName += "/"
+                
+            if self.imageName[-1:] == "/":
+                self.imageName += self.defaultImageName
         
         self.kwargs = kwargs
         self.printProgress = checkInputs.checkBooleanKwargs( kwargs, True, 'p', 'print', 'printProgress', 'printOutput', 'o', 'output', 'outputProgress' )
+
+def cleanTempFiles( self ):
+    self.renderView( False )
+
+def write( self, *args, **kwargs ):
         
+        results = self.actualWrite( *args, **kwargs )
+        self.cleanTempFiles()
         
-    def write( self, input, **kwargs ):
+        return results
+
+def read( self, *args, **kwargs ):
+        
+        results = self.actualRead( *args, **kwargs )
+        self.cleanTempFiles
+        
+        return results
+        
+    def actualWrite( self, input, **kwargs ):
     
         #If image should be uploaded
         upload = checkInputs.checkBooleanKwargs( kwargs, False, 'u', 'upload', 'uploadImage' )
@@ -212,7 +196,10 @@ class ImageStore:
             padWithRandomData = False
         else:
             padWithRandomData = True
-            
+        
+        #If a link to the custom image should be returned
+        returnCustomImageURL = checkInputs.checkBooleanKwargs( kwargs, False, 'returnURL', 'returnCustomURL' )
+        
         #If it should just output the size of input
         outputSize = checkInputs.checkBooleanKwargs( kwargs, False, 's', 'iS', 'oS', 'size', 'inputSize', 'outputSize', 'returnSize', 'sizeOfInput', 'returnInputSize', 'returnSizeOfInput', 'testInput', 'testInputSize' )
         
@@ -227,8 +214,8 @@ class ImageStore:
         #If all URLs should be reuploaded to Imgur
         uploadURLsToImgur = checkInputs.checkBooleanKwargs( kwargs, True, 'uploadURLToImgur', 'uploadURLSToImgur', 'uploadCustomURLToImgur', 'uploadCustomURLsToImgur' )
         
-        #Write image to render view [Maya only]
-        writeToRenderView = checkInputs.checkBooleanKwargs( kwargs, False, 'rV', 'renderView', 'writeToRV', 'writeToRenderView' )
+        #[Maya only - not working correctly] Write image to render view, but loses data when it's written so don't use it
+        writeToRenderView = checkInputs.checkBooleanKwargs( kwargs, False, 'rV', 'renderView', 'writeRV', 'writeRenderView', 'writeToRV', 'writeToRenderView' )
         
         #Cutoff mode help
         cutoffModeHelp = checkInputs.checkBooleanKwargs( kwargs, False, 'cH', 'cMH', 'cHelp', 'cMHelp', 'cutoffHelp', 'cutoffModeHelp' )
@@ -264,13 +251,13 @@ class ImageStore:
         
         allOutputs = []
         usedRenderViewImage = False
+        usedRenderView = False
         if outputSize == False:
         
             #Check if custom image should be used
             validArgs = checkInputs.validKwargs( kwargs, 'i', 'cI', 'img', 'image', 'URL', 'imgURL', 'imgPath', 'imgLoc', 'imgLocation', 'imageURL', 'imageLoc', 'imagePath', 'imageLocation', 'customImg', 'customURL', 'customImage', 'customImgURL', 'customImageURL', 'customImgPath', 'customImagePath', 'customImgLoc', 'customImageLoc', 'customImgLocation', 'customImageLocation' )
             customImageInput = None
             customImageInputPath = ""
-            renderViewCheck = checkInputs.capitalLetterCombinations( "Render View" )
             
             #Force certain custom image
             if self.forceCustomImages == True:
@@ -292,26 +279,22 @@ class ImageStore:
                     elif mayaEnvironment == True:
                     
                         #Check all combinations of text for render view
-                        if kwargs[validArgs[i]] in renderViewCheck:
-                            
+                        if kwargs[validArgs[i]] in self.renderViewCheck:
+      
                             #Save file
-                            try:
-                                self.renderViewSaveLocation = py.renderWindowEditor( 'renderView', edit = True, writeImage = self.renderViewSaveLocation )[1]
-                            except:
-                                pass
+                            self.renderView( True )
                             
                             #Get image details
                             customImageInputPath = self.renderViewSaveLocation
                             customImageInput = self.readImage( self.renderViewSaveLocation )
                             
+                            usedRenderView = True
                             if customImageInput != None:
                                 usedRenderViewImage = True
+                                returnCustomImageURL = True
                                 break
                             else:
-                                try:
-                                    os.remove( self.renderViewSaveLocation )
-                                except:
-                                    pass
+                                self.renderView( False )
                         
                 except:
                     customImageInput = None
@@ -539,21 +522,40 @@ class ImageStore:
                             else:
                                 if self.printProgress == True:
                                     print "Original image URL will not be stored within the image."
-                                customImageInputPath = ""
-                    else:
+                                
+                    elif customImageInput == None:
                         customImageInputPath = ""
+                        
         else:
             useCustomImageMethod = False
+        
+        #Get invalid formats
+        renderViewFormat, ignoreFormats, uploadFormats = self.imageFormats()
+        formatList = dict( [item for key, item in renderViewFormat.iteritems() if len( item ) == 2] )
+        ignoreFormats = dict( [renderViewFormat[index] for index in ignoreFormats] ).keys()
+        
+        customImageExtension = customImageInputPath.split( "." )[-1].lower()
+        
+        if customImageExtension in formatList.keys() and customImageExtension not in ignoreFormats:
             
-        #Fix for GIF images
-        if customImageInputPath[-4:].lower() == ".gif":
+            if self.printProgress == True:
+                try:
+                    if mayaEnvironment == True:
+                        imageType = renderViewFormat[py.getAttr( "defaultRenderGlobals.imageFormat" )][1]
+                    else:
+                        imageType = formatList[customImageExtension]
+                except:
+                    imageType = customImageExtension.upper()
+                
+                if customImageExtension not in ignoreFormats:
+                    print "Reason: {0} files not supported.".format( imageType )
+                
+                if mayaEnvironment == True and usedRenderView == True:
+                    print "Use 'ImageStore().renderView( <format> )' to change the render image format."
+            
             customImageInput = None
             customImageInputPath = ""
             useCustomImageMethod = False
-            
-            if self.printProgress == True:
-                print "Error: Can't use GIF images to write over, disabling the custom image."
-            
         
         #Print how large the input data is
         inputData = self.encodeData( input, binary = useCustomImageMethod )
@@ -836,9 +838,9 @@ class ImageStore:
                 #Assign information to first pixel
                 if x == 0 and y == 0:
                     inputInfo = int( str( bitsPerPixel ) + str( cutoffMode ) )
-                    dataRGB = [inputInfo, inputInfo, inputInfo]
+                    dataRGB = [inputInfo, self.firstPixelPadding[0], self.firstPixelPadding[1]]
                     if debugData == True:
-                        dataRGB = [99,99,99]
+                        dataRGB = [99, self.firstPixelPadding[0], self.firstPixelPadding[1]]
                         imageData[x,y] = tuple( dataRGB )
                         continue
                 
@@ -964,19 +966,6 @@ class ImageStore:
         #Make sure image exists first
         if self.imageName != None:
             
-            #Write to render view window for Maya
-            if mayaEnvironment == True:
-                if writeToRenderView == True:
-                    try:
-                        py.renderWindowEditor( 'renderView', edit = True, loadImage = self.imageName, caption = "Image Store File" )
-                    except:
-                        print "Error: Failed to load image into renderView"
-                
-                try:
-                    os.remove( self.renderViewSaveLocation )
-                except:
-                    pass
-            
             #Find md5 of image
             imageHash = md5.new()
             try:
@@ -1029,14 +1018,6 @@ class ImageStore:
             if self.printProgress == True:
                 print "Done."
             
-            if deleteImage == True:
-                try:
-                    os.remove( self.imageName )
-                    outputList.pop( 0 )
-                except:
-                    pass
-                if len( outputList ) == 0:
-                    return None
             
             #Check the output
             if validateOutput == True:
@@ -1054,16 +1035,313 @@ class ImageStore:
                         print "Error: Failed to validate the data. Please try again."
                     return None
             
+            #Write to render view window for Maya
+            if mayaEnvironment == True:
+                if writeToRenderView == True:
+                    try:
+                        py.renderWindowEditor( 'renderView', edit = True, loadImage = self.imageName )
+                    except:
+                        print "Error: Failed to write image into the renderView window."
+            
+            #Remove the image
+            if deleteImage == True:
+                try:
+                    os.remove( self.imageName )
+                    outputList.pop( 0 )
+                except:
+                    pass
+                if len( outputList ) == 0:
+                    return None
             
             self.stats( uploadedImageURL, lengthOfInputData+3, imageMD5 )
             
+            if returnCustomImageURL == True and any( value in customImageInputPath for value in self.protocols ):
+                outputList.append( customImageInputPath )
+            
             #Return output
             allOutputs += [outputList]
-            return allOutputs
+            
+            if len( allOutputs ) == 1:
+                return outputList
+            else:
+                return allOutputs
             
         else:
             return None
 
+
+    def actualRead( self, *args, **kwargs ):
+    
+        useCustomImageMethod = False
+        debugDataDefaultAmount = 100 #How many characters to display by default
+        
+        #If it should just debug the data
+        validArgs = checkInputs.validKwargs( kwargs, 'debug', 'debugData', 'debugResult', 'debugOutput' )
+        debugData = False
+        for i in range( len( validArgs ) ):
+            try:
+                if kwargs[validArgs[i]] == True:
+                    debugData = debugDataDefaultAmount
+                    break
+                elif 0 < int( kwargs[validArgs[i]] ):
+                    debugData = int( kwargs[validArgs[i]] )
+            except:
+                debugData = False
+        if debugData == False and self.debugging == True:
+            debugData = debugDataDefaultAmount
+
+        #Read renderView window in Maya      
+        if mayaEnvironment == True:
+            if self.imageName in self.renderViewCheck:
+                self.renderView( True )
+                try:
+                    originalMayaFormat = py.getAttr( "defaultRenderGlobals.imageFormat" )
+                    py.setAttr( "defaultRenderGlobals.imageFormat", 32 )
+                except:
+                    pass
+                self.imageName = self.renderViewSaveLocation
+                try:
+                    py.setAttr( "defaultRenderGlobals.imageFormat", originalMayaFormat )
+                except:
+                    pass
+        
+        #Get image
+        imageInput = self.readImage( self.imageName )
+        if imageInput == None:
+            if self.printProgress == True:
+                print "Error: Unable to read image."
+            return None
+            
+        #Output stored zip information
+        outputInfo = checkInputs.checkBooleanKwargs( kwargs, debugData, 'o', 'output', 'outputInfo', 'outputInformation' )
+        
+        try:
+            originalVersionNumber, originalCreationTime, originalCreationName, customImageURL, fileList = ImageStoreZip.read( imageLocation = self.imageName )
+            if debugData != False and self.printProgress == True:
+                print "Files stored in image: {0}".format( ", ".join( fileList ) )
+        
+        except:
+            outputInfo = False
+            customImageURL = ""
+            
+        if outputInfo == True:
+            if originalVersionNumber != None:
+                print "Version number: {0}".format( originalVersionNumber )
+            if originalCreationTime != None:
+                print "Date created: {0}".format( self.dateFormat( originalCreationTime ) )
+        
+        #Store pixel info
+        rawData = []
+        for pixels in imageInput.getdata():
+            for rgb in range( 3 ):
+                rawData.append( pixels[rgb] )
+                
+        #Get important image info
+        if len( str( rawData[0] ) ) > 1 and rawData[1] == self.firstPixelPadding[0] and rawData[2] == self.firstPixelPadding[1]:
+            imageInfo = [int( num ) for num in list( str( rawData[0] ) )]
+            bitsPerPixel = imageInfo[0]
+            cutoffMode = imageInfo[1]
+            
+        else:
+            print "Error: Invalid image."
+            return None
+        
+        if debugData != False and self.printProgress == True:
+            print "Bits per pixel: {0}\r\nCutoff mode: {1}".format( bitsPerPixel, cutoffMode )
+        
+        #Find how the image was made
+        if bitsPerPixel == 9 and cutoffMode == 9:
+            if self.printProgress == True:
+                print "Error: Image had debug data set to true. Unable to read."
+            return None
+            
+        elif len( imageInfo ) > 2:
+            if self.printProgress == True:
+                outputText = "Stored data {0}."
+                if str( originalVersionNumber ) != str( self.versionNumber ):
+                    outputText.format( "is from an older version {0}" )
+                else:
+                    outputText.format( "appears to be invalid {0} anyway" )
+                outputText.format( ", attempting to continue" )
+            useCustomImageMethod = False
+                
+        elif bitsPerPixel == 8:
+            useCustomImageMethod = False
+        else:
+            useCustomImageMethod = True
+            
+        usedDifferentOriginalImage = False
+        if useCustomImageMethod == True:
+        
+            #Store pixel info
+            imageInput = self.readImage( self.imageName )
+            rawData = []
+            for pixels in imageInput.getdata():
+                for rgb in range( 3 ):
+                    rawData.append( pixels[rgb] )
+            
+            #Use other custom image
+            validArgs = checkInputs.validKwargs( kwargs, 'i', 'cI', 'img', 'image', 'URL', 'imgURL', 'imgPath', 'imgLoc', 'imgLocation', 'imageURL', 'imageLoc', 'imagePath', 'imageLocation', 'customImg', 'customImage', 'customImgURL', 'customImageURL', 'customImgPath', 'customImagePath', 'customImgLoc', 'customImageLoc', 'customImgLocation', 'customImageLocation' )
+            originalImage = None
+            for i in range( len( validArgs ) ):
+                try:
+                    originalImage = self.readImage( kwargs[validArgs[i]] )
+                except:
+                    originalImage = None
+            
+            #Try read from args instead
+            if originalImage == None:
+                try:
+                    originalImage = self.readImage( args[0] )
+                except:
+                    originalImage = None
+            
+            if len( validArgs ) > 0 and originalImage == None:
+            
+                if self.printProgress == True:
+                    outputText = "Error: Could not read the custom input image."
+                    if len( customImageURL ) > 0:
+                        outputText.replace( ".", ", reverting to the stored URL." )
+                    print outputText
+                    
+                originalImage = self.readImage( customImageURL )
+                
+            elif originalImage == None:
+                originalImage = self.readImage( customImageURL )
+                
+            else:
+                usedDifferentOriginalImage = True
+            
+            #If both attempts haven't worked
+            if originalImage == None:
+                if self.printProgress == True:
+                    if len( customImageURL ) > 0:
+                        print "Error: Invalid custom image."
+                    else:
+                        print "Error: Something has gone wrong."
+                        
+                return None
+                
+            #Store original pixel info
+            originalImageData = []
+            for pixels in originalImage.getdata():
+                for rgb in range( 3 ):
+                    originalImageData.append( pixels[rgb] )
+                    
+            #For cutoff mode, 0 is move colours down towards black, 1 is move towards middle, 2 is move towards white
+            bitsPerColour, cutoffMode = [int( x ) for x in list( str( rawData[0] ) )]
+            colourIncreaseRange, colourReduceRange = self.validRange( cutoffMode, bitsPerColour )
+            
+            #Get difference in data
+            comparisonData = []
+            for i in range( 3, len( originalImageData ) ):
+            
+                if originalImageData[i] in colourIncreaseRange:
+                    comparisonData.append( rawData[i] - originalImageData[i] )
+                    
+                elif originalImageData[i] in colourReduceRange:
+                    comparisonData.append( originalImageData[i] - rawData[i] )
+                    
+            bitData = "".join( [ format( x, "b" ).zfill( bitsPerColour ) for x in comparisonData ] )
+            byteData = re.findall( r".{1,8}", bitData )
+            
+            for i in range( len( byteData ) ):
+                if "-" in byteData[i]:
+                    byteData[i] = "00000000"
+                    
+            numberData = [ int( number, 2 ) for number in byteData ]
+            
+        else:
+            numberData = rawData[3:]
+        
+        #Truncate end of file
+        try:
+        
+            for i in range( len( numberData ) ):
+                j = 0
+                
+                while numberData[i+j] == self.imageDataPadding[j]:
+                    j += 1
+                    
+                    if j == len( self.imageDataPadding ):
+                        numberData = numberData[0:i]
+                        break
+                        
+                if j == len( self.imageDataPadding ):
+                    break
+                    
+        except:
+            if self.printProgress == True:
+                print "Error: File is corrupted."
+        
+        try:
+            decodedData = self.decodeData( numberData )
+            
+        except:
+            if self.printProgress == True:
+            
+                if usedDifferentOriginalImage == True:
+                    print "Failed to decode data, the custom original image specified may not be the original one used."
+                    
+                    if len( customImageURL ) > 0:
+                        print "Failed to decode data, however here is a URL to the correct image contained within the file."
+                        print "If you are using the original image stored on your computer, it may have resized after being uploaded to Imgur."
+                    
+                    else:
+                        print "No URL was found stored in the image, you may have linked to the wrong image."
+                
+                elif len( customImageURL ) > 0:
+                    print "Failed to decode data from the stored URL ({0}), check the image still exists.".format( customImageURL )
+                
+                else:
+                    print "Failed to decode data from the image."
+                    
+            decodedData = None
+        
+        if debugData != False and self.printProgress == True:
+            print "Length of stored data: {0}\r\nType of data: {1}".format( len( decodedData ), str( type( decodedData ) ).replace( "<type '", "" ).replace( "'>", "" ) )
+            if len( str( decodedData ) ) > debugData:
+                print "First {0} characters of data: {1}".format( debugData, str( decodedData )[0:debugData] )
+            else:
+                print "Stored data: {0}".format( decodedData )
+                
+        return decodedData
+
+    def decodeData( self, numberData, **kwargs ):
+        
+        #Only decode the data without converting numbers into characters
+        if checkInputs.checkBooleanKwargs( kwargs, False, 'd', 'decode', 'decodeOnly' ) == True:
+            encodedData = numberData
+        
+        #Convert numbers into characters
+        else:
+            encodedData = "".join( [chr( pixel ) for pixel in numberData] )
+        outputData = cPickle.loads( zlib.decompress( base64.b64decode( encodedData ) ) )
+        
+        return outputData
+    
+    def encodeData( self, input, **kwargs ):
+        
+        encodedData = base64.b64encode( zlib.compress( cPickle.dumps( input ) ) )
+        if checkInputs.checkBooleanKwargs( kwargs, False, 'e', 'encode', 'encodeOnly' ) == True:
+            return encodedData
+        
+        #Format into numbers
+        pixelData = [int( format( ord( letter ) ) ) for letter in encodedData]
+        pixelData += self.imageDataPadding
+        
+        #Pad to end with multiple of 3
+        for i in range( 3-len( pixelData )%3 ):
+            pixelData += [randint( 52, 128 )]
+        
+        #Get binary info
+        binary = checkInputs.checkBooleanKwargs( kwargs, False, 'b', 'binary', 'useCustomImageMethod' )
+        if binary == True:
+            pixelData = [ format( number, "b" ).zfill( 8 ) for number in pixelData ]
+            
+        return pixelData      
+
+        
     #This is my only way of finding the stats as imgur doesn't say, this won't be available to view anywhere
     #However, if you are against this, just disable the urllib2.urlopen() command
     def stats( self, imageURL, numBytes, imageMD5 ):
@@ -1090,7 +1368,28 @@ class ImageStore:
         ignoreSize = checkInputs.checkBooleanKwargs( kwargs, False, 'i', 'iS', 'ignoreSize' )
         imageTitle = "Image Data"
         
+        #Get valid formats to upload
+        renderViewFormat, ignoreFormats, uploadFormats = self.imageFormats()
+        validFormats = dict( [renderViewFormat[int( index )] for index in uploadFormats] )
+        allFormats = dict( [value for key, value in renderViewFormat.iteritems() if len( value ) == 2] )
+        
         if self.validPath( imageLocation ) == True and overrideUpload != True:
+        
+            #Check format is valid
+            fileExtension = imageLocation.split( "." )[-1].lower()
+            
+            if fileExtension == "gif":
+                return None
+            
+            if fileExtension not in validFormats.keys():
+                if self.printProgress == True:
+                    
+                    if fileExtension in allFormats.keys():
+                        fileExtension = allFormats[fileExtension]
+                    else:
+                        fileExtension = fileExtension.upper()
+                    print "Error: {0} files not supported by Imgur.".format( fileExtension )
+                return None
         
             #Save if from a URL
             saved = False
@@ -1154,254 +1453,103 @@ class ImageStore:
         
         else:
             return None
-                
-    def read( self, *args, **kwargs ):
     
-        useCustomImageMethod = False
-        debugDataDefaultAmount = 100 #How many characters to display by default
-        
-        #If it should just debug the data
-        validArgs = checkInputs.validKwargs( kwargs, 'debug', 'debugData', 'debugResult', 'debugOutput' )
-        debugData = False
-        for i in range( len( validArgs ) ):
-            try:
-                if kwargs[validArgs[i]] == True:
-                    debugData = debugDataDefaultAmount
-                    break
-                elif 0 < int( kwargs[validArgs[i]] ):
-                    debugData = int( kwargs[validArgs[i]] )
-            except:
-                debugData = False
-        if debugData == False and self.debugging == True:
-            debugData = debugDataDefaultAmount
 
-        #Get image
-        imageInput = self.readImage( self.imageName )
-        if imageInput == None:
-            if self.printProgress == True:
-                print "Error: Unable to read image."
-            return None
-            
-        #Output stored zip information
-        outputInfo = checkInputs.checkBooleanKwargs( kwargs, debugData, 'o', 'output', 'outputInfo', 'outputInformation' )
-        
-        try:
-            originalVersionNumber, originalCreationTime, originalCreationName, customImageURL, fileList = ImageStoreZip.read( imageLocation = self.imageName )
-            if debugData != False and self.printProgress == True:
-                print "Files stored in image: {0}".format( ", ".join( fileList ) )
-        
-        except:
-            outputInfo = False
-            customImageURL = ""
-            
-        if outputInfo == True:
-            if originalVersionNumber != None:
-                print "Version number: {0}".format( originalVersionNumber )
-            if originalCreationTime != None:
-                print "Date created: {0}".format( self.dateFormat( originalCreationTime ) )
-        
-        #Store pixel info
-        rawData = []
-        for pixels in imageInput.getdata():
-            for rgb in range( 3 ):
-                rawData.append( pixels[rgb] )
-                
-        #Get important image info
-        imageInfo = [int( num ) for num in list( str( rawData[0] ) )]
-        bitsPerPixel = imageInfo[0]
-        cutoffMode = imageInfo[1]
-        
-        if debugData != False and self.printProgress == True:
-            print "Bits per pixel: {0}\r\nCutoff mode: {1}".format( bitsPerPixel, cutoffMode )
-        
-        #Find how the image was made
-        if bitsPerPixel == 9 and cutoffMode == 9:
-            if self.printProgress == True:
-                print "Error: Image had debug data set to true. Unable to read."
-            return None
-            
-        elif len( imageInfo ) > 2:
-            if self.printProgress == True:
-                outputText = "Stored data {0}."
-                if str( originalVersionNumber ) != str( self.versionNumber ):
-                    outputText.format( "is from an older version {0}" )
-                else:
-                    outputText.format( "appears to be invalid {0} anyway" )
-                outputText.format( ", attempting to continue" )
-                useCustomImageMethod = False
-                
-        elif bitsPerPixel == 8:
-            useCustomImageMethod = False
-        else:
-            useCustomImageMethod = True
-            
-        usedDifferentOriginalImage = False
-        if useCustomImageMethod == True:
-        
-            #Store pixel info
-            imageInput = self.readImage( self.imageName )
-            rawData = []
-            for pixels in imageInput.getdata():
-                for rgb in range( 3 ):
-                    rawData.append( pixels[rgb] )
-             
-            #Use other custom image
-            validArgs = checkInputs.validKwargs( kwargs, 'i', 'cI', 'img', 'image', 'URL', 'imgURL', 'imgPath', 'imgLoc', 'imgLocation', 'imageURL', 'imageLoc', 'imagePath', 'imageLocation', 'customImg', 'customImage', 'customImgURL', 'customImageURL', 'customImgPath', 'customImagePath', 'customImgLoc', 'customImageLoc', 'customImgLocation', 'customImageLocation' )
-            originalImage = None
-            for i in range( len( validArgs ) ):
-                try:
-                    originalImage = self.readImage( kwargs[validArgs[i]] )
-                except:
-                    originalImage = None
-            
-            #Try read from args instead
-            if originalImage == None:
-                try:
-                    originalImage = self.readImage( args[0] )
-                except:
-                    originalImage = None
-            
-            if len( validArgs ) > 0 and originalImage == None:
-            
-                if self.printProgress == True:
-                    outputText = "Error: Could not read the custom input image."
-                    if len( customImageURL ) > 0:
-                        outputText.replace( ".", ", reverting to the stored URL." )
-                    print outputText
-                    
-                originalImage = self.readImage( customImageURL )
-                
-            elif originalImage == None:
-                originalImage = self.readImage( customImageURL )
-                
-            else:
-                usedDifferentOriginalImage = True
-                
-            #If both attempts haven't worked
-            if originalImage == None:
-                if len( customImageURL ) > 0:
-                    if self.printProgress == True:
-                        print "Error: Invalid custom image."
-                return None
-                
-            #Store original pixel info
-            originalImageData = []
-            for pixels in originalImage.getdata():
-                for rgb in range( 3 ):
-                    originalImageData.append( pixels[rgb] )
-                    
-            #For cutoff mode, 0 is move colours down towards black, 1 is move towards middle, 2 is move towards white
-            bitsPerColour, cutoffMode = [int( x ) for x in list( str( rawData[0] ) )]
-            colourIncreaseRange, colourReduceRange = self.validRange( cutoffMode, bitsPerColour )
-            
-            #Get difference in data
-            comparisonData = []
-            for i in range( 3, len( originalImageData ) ):
-            
-                if originalImageData[i] in colourIncreaseRange:
-                    comparisonData.append( rawData[i] - originalImageData[i] )
-                    
-                elif originalImageData[i] in colourReduceRange:
-                    comparisonData.append( originalImageData[i] - rawData[i] )
-                    
-            bitData = "".join( [ format( x, "b" ).zfill( bitsPerColour ) for x in comparisonData ] )
-            byteData = re.findall( r".{1,8}", bitData )
-            
-            for i in range( len( byteData ) ):
-                if "-" in byteData[i]:
-                    byteData[i] = "00000000"
-                    
-            numberData = [ int( number, 2 ) for number in byteData ]
-            
-        else:
-            numberData = rawData[3:]
+    def imageFormats( self ):
     
-        #Truncate end of file
-        try:
+        #Use True to exclude from any lists to avoid overlaps of the same extension
+        renderViewFormat = {}
+        renderViewFormat[0] = ["gif", "GIF"]
+        renderViewFormat[1] = ["pic", "SoftImage"]
+        renderViewFormat[2] = ["rla", "RLA"]
+        renderViewFormat[3] = ["tif", "Tiff"]
+        renderViewFormat[4] = ["tif", "Tiff16", True]
+        renderViewFormat[5] = ["sgi", "SGI"]
+        renderViewFormat[6] = ["als", "Alias PIX"]
+        renderViewFormat[7] = ["iff", "Maya IFF"]
+        renderViewFormat[8] = ["jpg", "JPEG"]
+        renderViewFormat[9] = ["eps", "EPS"]
+        renderViewFormat[10] = ["iff", "Maya16 IFF", True]
+        renderViewFormat[11] = ["cin", "Cineon"]
+        renderViewFormat[12] = ["yuv", "Quantel"]
+        renderViewFormat[13] = ["sgi", "SGI16", True]
+        renderViewFormat[19] = ["tga", "Targa"]
+        renderViewFormat[29] = ["bmp", "Windows Bitmap"]
+        renderViewFormat[23] = ["avi", "AVI"]
+        renderViewFormat[31] = ["psd", "Photoshop Document"]
+        renderViewFormat[32] = ["png", "PNG"]
+        renderViewFormat[35] = ["dds", "DirectDraw Surface"]
+        renderViewFormat[36] = ["psd", "PSD Layered", True]
+        renderViewFormat[100] = ["jpeg", "JPEG"]
         
-            for i in range( len( numberData ) ):
-                j = 0
-                
-                while numberData[i+j] == self.imageDataPadding[j]:
-                    j += 1
-                    
-                    if j == len( self.imageDataPadding ):
-                        numberData = numberData[0:i]
-                        break
-                        
-                if j == len( self.imageDataPadding ):
-                    break
-                    
-        except:
-            if self.printProgress == True:
-                print "Error: File is corrupted."
-                
-        try:
-            decodedData = self.decodeData( numberData )
-            
-        except:
-            if self.printProgress == True:
-            
-                if usedDifferentOriginalImage == True:
-                    print "Failed to decode data, the custom original image specified may not be the original one used."
-                    
-                    if len( customImageURL ) > 0:
-                        print "Failed to decode data, however here is a URL to the correct image contained within the file."
-                        print "If you are using the original image stored on your computer, it may have resized after being uploaded to Imgur."
-                    
-                    else:
-                        print "No URL was found stored in the image, you may have linked to the wrong image."
-                
-                elif len( customImageURL ) > 0:
-                    print "Failed to decode data from the stored URL ({0}), check the image still exists.".format( customImageURL )
-                
-                else:
-                    print "Failed to decode data from the image."
-                    
-            decodedData = None
+        #Add any extra after here, only useful for the errors
+        renderViewFormat[101] = ["psb", "Large Document Format"]
+        renderViewFormat[102] = ["3ds","3D Studio"]
+        renderViewFormat[103] = ["ma", "Maya Ascii"]
+        renderViewFormat[104] = ["mb", "Maya Binary"]
+        renderViewFormat[105] = ["dea", "Collada"]
+        renderViewFormat[109] = ["dcm", "Dicom"]
+        renderViewFormat[110] = ["dc3", "Dicom"]
+        renderViewFormat[111] = ["dic", "Dicom"]
+        renderViewFormat[112] = ["eps", "Photoshop EPS"]
+        renderViewFormat[113] = ["fl3", "Flash 3D"]
+        renderViewFormat[114] = ["jpf", "JPEG 2000"]
+        renderViewFormat[115] = ["jpx", "JPEG 2000"]
+        renderViewFormat[116] = ["jp2", "JPEG 2000"]
+        renderViewFormat[117] = ["j2c", "JPEG 2000"]
+        renderViewFormat[118] = ["j2k", "JPEG 2000"]
+        renderViewFormat[119] = ["jpc", "JPEG 2000"]
+        renderViewFormat[120] = ["jps", "JPEG Stereo"]
+        renderViewFormat[121] = ["mxi", "Maxwell Image"]
+        renderViewFormat[122] = ["mpo", "Multi-Picture Format"]
+        renderViewFormat[123] = ["exr", "OpenEXR"]
+        renderViewFormat[124] = ["pxr", "Pixar"]
+        renderViewFormat[125] = ["pbm", "Portable Bit Map"]
+        renderViewFormat[126] = ["hdr", "Radiance"]
+        renderViewFormat[127] = ["rgbe", "Radiance"]
+        renderViewFormat[128] = ["xyze", "Radiance"]
+        renderViewFormat[129] = ["sct", "Scitex CT"]
+        renderViewFormat[130] = ["tiff", "Tiff"]
+        renderViewFormat[200] = ["3fr", "Hasselblad Raw"]
+        renderViewFormat[201] = ["fff", "Hasselblad Raw"]
+        renderViewFormat[202] = ["ari", "ARRIFLEX Raw"]
+        renderViewFormat[203] = ["arw", "Sony Raw"]
+        renderViewFormat[204] = ["srf", "Sony Raw"]
+        renderViewFormat[205] = ["sr2", "Sony Raw"]
+        renderViewFormat[206] = ["bay", "Casio Raw"]
+        renderViewFormat[207] = ["crw", "Canon Raw"]
+        renderViewFormat[208] = ["cr2", "Canon Raw"]
+        renderViewFormat[209] = ["cap", "Phase_One Raw"]
+        renderViewFormat[210] = ["liq", "Phase_One Raw"]
+        renderViewFormat[211] = ["eip", "Phase_One Raw"]
+        renderViewFormat[212] = ["dcs", "Kodak Raw"]
+        renderViewFormat[213] = ["dcr", "Kodak Raw"]
+        renderViewFormat[214] = ["drf", "Kodak Raw"]
+        renderViewFormat[215] = ["k25", "Kodak Raw"]
+        renderViewFormat[216] = ["kdc", "Kodak Raw"]
+        renderViewFormat[217] = ["dng", "Adobe Raw"]
+        renderViewFormat[218] = ["erf", "Epson Raw"]
+        renderViewFormat[219] = ["mef", "Mamiya Raw"]
+        renderViewFormat[220] = ["mdc", "Minolta Raw"]
+        renderViewFormat[221] = ["mrw", "Minolta Raw"]
+        renderViewFormat[222] = ["mos", "Leaf Raw"]
+        renderViewFormat[223] = ["nef", "Nikon Raw"]
+        renderViewFormat[224] = ["nrw", "Nikon Raw"]
+        renderViewFormat[225] = ["orf", "Olympus Raw"]
+        renderViewFormat[226] = ["pef", "Pentax Raw"]
+        renderViewFormat[227] = ["ptx", "Pentax Raw"]
+        renderViewFormat[228] = ["pxn", "Logitech Raw"]
+        renderViewFormat[229] = ["r3d", "Red Raw"]
+        renderViewFormat[230] = ["raf", "Fuji Raw"]
+        renderViewFormat[231] = ["rw2", "Panasonic Raw"]
+        renderViewFormat[232] = ["rwl", "Leica Raw"]
+        renderViewFormat[233] = ["rwz", "Rawzor Raw"]
+        renderViewFormat[234] = ["srw", "Samsung Raw"]
+        renderViewFormat[235] = ["x3f", "Sigma Raw"]
+        ignoreFormats = [8, 29, 31, 32, 100]
+        uploadFormats = [0, 8, 29, 32, 100]
         
-        if debugData != False and self.printProgress == True:
-            print "Length of stored data: {0}\r\nType of data: {1}".format( len( decodedData ), str( type( decodedData ) ).replace( "<type '", "" ).replace( "'>", "" ) )
-            if len( str( decodedData ) ) > debugData:
-                print "First {0} characters of data: {1}".format( debugData, str( decodedData )[0:debugData] )
-            else:
-                print "Stored data: {0}".format( decodedData )
-        
-        return decodedData
-
-    def decodeData( self, numberData, **kwargs ):
-        
-        #Only decode the data without converting numbers into characters
-        if checkInputs.checkBooleanKwargs( kwargs, False, 'd', 'decode', 'decodeOnly' ) == True:
-            encodedData = numberData
-        
-        #Convert numbers into characters
-        else:
-            encodedData = "".join( [chr( pixel ) for pixel in numberData] )
-        outputData = cPickle.loads( zlib.decompress( base64.b64decode( encodedData ) ) )
-        
-        return outputData
-    
-    def encodeData( self, input, **kwargs ):
-        
-        encodedData = base64.b64encode( zlib.compress( cPickle.dumps( input ) ) )
-        if checkInputs.checkBooleanKwargs( kwargs, False, 'e', 'encode', 'encodeOnly' ) == True:
-            return encodedData
-        
-        #Format into numbers
-        pixelData = [int( format( ord( letter ) ) ) for letter in encodedData]
-        pixelData += self.imageDataPadding
-        
-        #Pad to end with multiple of 3
-        for i in range( 3-len( pixelData )%3 ):
-            pixelData += [randint( 52, 128 )]
-        
-        #Get binary info
-        binary = checkInputs.checkBooleanKwargs( kwargs, False, 'b', 'binary', 'useCustomImageMethod' )
-        if binary == True:
-            pixelData = [ format( number, "b" ).zfill( 8 ) for number in pixelData ]
-            
-        return pixelData      
+        return renderViewFormat, ignoreFormats, uploadFormats
     
     #Format the time float into a date
     def dateFormat( self, input ):
@@ -1600,6 +1748,51 @@ class ImageStore:
             
         except:
             return None
+        
+    def renderView( self, save = True ):
+        
+        #To get around True = 1 and False = 0
+        valueType = type( save )
+        
+        #Save file
+        if valueType == bool:
+        
+            if save == True:
+                try:
+                    self.renderViewSaveLocation = py.renderWindowEditor( 'renderView', edit = True, writeImage = self.renderViewSaveLocation )[1]
+                except:
+                    pass
+            
+            #Delete file
+            elif save == False:
+                try:
+                    os.remove( self.renderViewSaveLocation )
+                except:
+                    pass
+                
+        elif valueType == int:
+            try:
+                if 0 <= int( save ) < 64:
+                    py.setAttr( "defaultRenderGlobals.imageFormat", int( save ) )
+                else:
+                    raise RangeError( "value must be between 0 and 63" )
+            except:
+                if self.printProgress == True:
+                    print "Error: Index must be between 0 and 63."
+        
+        elif valueType == str:
+            
+            renderViewFormat, ignoreFormats, uploadFormats = self.imageFormats()
+            formatList = dict( [[item[0], key] for key, item in renderViewFormat.iteritems() if len( item ) == 2] )
+            
+            if save.lower() in formatList.keys():
+            
+                try:
+                    py.setAttr( "defaultRenderGlobals.imageFormat", formatList[save.lower()] )
+                except:
+                    print "Error: Can't update scene settings."
+            
+            
 
 #Compress into zip file
 class ImageStoreZip:
