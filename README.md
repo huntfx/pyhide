@@ -75,227 +75,228 @@ Load up imageStore.py and you can change the default save location of files and 
 
 <h4>All Commands:</h4>
 
-    class ImageStore( imageName, **kwargs ):
-    
-    	imageName 
-    	 - String
-    	 - the name to save the image as, which may or may not include the location
-    		Default: "C:/Users/Name/Documents/ImageDataStore.png"
-    
-    	Kwargs:
-    		p/print/printProgress
-    		 - True/False
-    		 - Set to false to disable all messages being printed
-    			Default: True
-    
-    
-    	def write( input, **kwargs ):
-    	
-    		input
-    		 - any data to store in the image
-    
-    		Kwargs:
-    
-    			i/c/image/customImage
-    			 - String
-    			 - Path or URL to an image to store data in a copy.
-    				Default: None
-    
-    			u/upload/uploadImage
-    			 - True/False 
-    			 - Upload the image to imgur after creation.
-    				Default: False
-    			
-    			o/open/openImage
-    			 - True/False 
-    			 - Open the image in a browser.
-    				Default: True
-    
-    			uI/uploadOriginal/uploadCustomImage
-    			 - True/False 
-    			 - Upload the original image to imgur and store URL in the file.
-    			 - Setting to false will require a path or URL for the original image to be provided each time the image is read.
-    				Default: True
-    
-    			cM/mode/cutoffMode
-    			 - Integer/String/Tuple
-    			 - Choose a custom cutoff mode to use, supports multiple ones to be input.
-    			 - Input may be an integer '4', tuple '(2,4,5)', or string "2,4,5"
-    				Default: None
-    
-    			a/aCM/allCutoffModes
-    			 - True/False
-    			 - Automatically save the image under all the cutoff modes, the same as writing 0-7 for the above command.
-    				Default: False
-    
-    			r/ratio/sizeRatio
-    			 - Float (0-1)
-    			 - Set the ratio of width to height.
-    			 - If a custom image is provided but is too small to store the data, the ratio will switch to that of the image.
-    				Default: 0.52 (similar to 16:9 resolutions)
-    
-    			revert/revertToDefault
-    			 - True/False
-    			 - When using a custom image, if it's too small, the code will revert to the default style and disable custom images.
-    			 - You can use this to disable this option and return None if the image won't fit in the custom image.
-    				Default: True
-    
-    			d/disable/disableInformation
-    			 - True/False 
-    			 - Disable output of extra information such as time created, URL and username.
-    				Default: False
-    
-    			cache/writeCache
-    			 - True/False
-    			 - Store some calculated information to a cache file, which can dramatically improve loading times.
-    			 - It runs on the hash of an image and takes up barely any space, so it's worthwile keeping activated.
-    				Default: True
-    
-    			uploadURLsToImgur
-    			 - True/False
-    			 - Used when uploading custom images is enabled
-    			 - By default the code will check if the custom image is a link, and this adds a bit extra to check it's from Imgur.
-    			 - If set to True and the image is from elsewhere, it will reupload the image.
-    			 - You may want to disable this if you are using an image on your own website, otherwise it's best to keep it enabled to avoid 404 errors.
-    				Default: True
-    
-    			vO/validateOutput
-    			 - True/False
-    			 - Will read the output image to make sure the data exactly matches the input.
-    			 - May slow down execution time if enabled.
-    				Default: False
-
-			returnURL/returnCustomURL
-			 - Add the custom image URL to the output list.
-			 - Not added by default as it'll be ImageStore().write()[1] without uploading the output image, or ImageStore().write()[2] if you do.
-			 - This is stored in the file anyway, so shouldn't really be needed
-    
-    
-			#MAYA
-
-			i/c/image/customImage
-			 - String
-			 - Same as above, but set to "RenderView" to use the image in the renderView window
-
-			rV/renderView/writeToRenderView
+	class ImageStore( imageName, **kwargs ):
+	
+		imageName 
+		 - String
+		 - the name to save the image as, which may or may not include the location
+			Default: "C:/Users/Name/Documents/ImageDataStore.png"
+	
+		Kwargs:
+			p/print/printProgress
 			 - True/False
-			 - Will load the output image into the renderView window.
-			 - Currently not working as Maya seems to convert the image.
-			 
-			 
-    			#DEBUGGING
-    
-    			debug/debugResult/debugOutput
-    			 - True/False 
-    			 - Will set all stored information to blackand all other information to white
-    			 - There should always be mostly white and some black, unless you are storing a very small amount of information.
-    				Default: False
-    
-    			cH/cutoffHelp/cutoffModeHelp
-    			 - True/False
-    			 - Output all cutoff modes and what they do
-    				Default: False
-    
-    			s/size/returnSize
-    			 - True/False 
-    			 - Return the input size.
-    				Default: False
-    
-    			returnInfo/getImageInfo
-    			 - True/False 
-    			 - Return maximum number of bytes the image can hold.
-    				Default: False
-    
-    			t/test/testImage
-    			 - String
-    			 - Return True/False depending on if custom image can be read from the path/URL.
-    				Default: None
-    				
-    				
-    		If image was saved:
-    			Return [[Path to image, (image url if uploaded) ], (same if multiple images were created)]
-    		If error in saving image:
-    			Return None
-    
-    
-    
-    	def read( *args, **kwargs ):
-    
-    		Args:
-    			
-    			(Path to custom image)
-    			 - String
-    			 - Use this path instead of stored URL for custom image. Won't work if it's not the exact same as the original image used to store data.
-    			 - If the original image was uploaded and imgur resized/resampled it, only the URL will work, unless you saved the image again.
-    				Default: None
-    		
-    		Kwargs:
-    		
-    			i/image/imagePath/customImage
-    			 - String
-    			 - Same as the path to custom image in args, this one will be given priority if set.
-    				Default: None
-    
-    			o/output/outputInformation
-    			 - True/False
-    			 - Print stored information within the file if it exists. If disableInfo was set to True, nothing will be shown.
-    				Default: False
-    
-    
-    			#DEBUGGING
-    
-    			debug/debugResult/debugOutput
-    			 - True/False/Integer
-    			 - Print various information useful in testing if the correct information is stored.
-    			 - By default it will output the stored files, length of data, type of data, and the first 100 characters (set to a number to modify the amount).
-    			 - Note that it will still return the stored information, the only difference is it will print more information.
-    				Default: False
-    
-    
-    
-    		If image was read:
-    			Return <stored data>
-    		If error in reading image:
-    			Return None
-    
-    
-    
-    	def cache( **kwargs ):
-    
-    		Kwargs:
-    	
-    			c/clean/cleanCache
-    			 - True/False
-    			 - Delete the cache file.
-    				Default: False
-    
-    			k/key/value
-    			 - String (hash of image)
-    			 - Return information related to the cached image as a list.
-    				Default: None
-    
-    			delKey/deleteKey
-    			 - String (hash of image)
-    			 - Attempt to remove information on an individual cached image.
-    				Default: None
-    			
-    			p/path/cachePath
-    			 - String
-    			 - Return the location where the cache is stored.
-    			 - It will still return the location even if no cache file exists.
-    				Default: False
-    				
-    			h/hash/imageHash
-    			 - True/None/String
-    			 - Return the hash of the image.
-    			 - If True is given instead of a location, the image location passed to the main class will be used.
-    			 	Default: None
-    
-    
-    		If cache exists:
-    			Return <cache dictionary>
-    		If error somewhere:
-    			Return None
+			 - Set to false to disable all messages being printed
+				Default: True
+	
+	
+		def write( input, **kwargs ):
+		
+			input
+			 - any data to store in the image
+	
+			Kwargs:
+	
+				i/c/image/customImage
+				 - String
+				 - Path or URL to an image to store data in a copy.
+					Default: None
+	
+				u/upload/uploadImage
+				 - True/False 
+				 - Upload the image to imgur after creation.
+					Default: False
+				
+				o/open/openImage
+				 - True/False 
+				 - Open the image in a browser.
+					Default: True
+	
+				uI/uploadOriginal/uploadCustomImage
+				 - True/False 
+				 - Upload the original image to imgur and store URL in the file.
+				 - Setting to false will require a path or URL for the original image to be provided each time the image is read.
+					Default: True
+	
+				cM/mode/cutoffMode
+				 - Integer/String/Tuple
+				 - Choose a custom cutoff mode to use, supports multiple ones to be input.
+				 - Input may be an integer '4', tuple '(2,4,5)', or string "2,4,5"
+					Default: None
+	
+				a/aCM/allCutoffModes
+				 - True/False
+				 - Automatically save the image under all the cutoff modes, the same as writing 0-7 for the above command.
+					Default: False
+	
+				r/ratio/sizeRatio
+				 - Float (0-1)
+				 - Set the ratio of width to height.
+				 - If a custom image is provided but is too small to store the data, the ratio will switch to that of the image.
+					Default: 0.52 (similar to 16:9 resolutions)
+	
+				revert/revertToDefault
+				 - True/False
+				 - When using a custom image, if it's too small, the code will revert to the default style and disable custom images.
+				 - You can use this to disable this option and return None if the image won't fit in the custom image.
+					Default: True
+	
+				d/disable/disableInformation
+				 - True/False 
+				 - Disable output of extra information such as time created, URL and username.
+					Default: False
+	
+				cache/writeCache
+				 - True/False
+				 - Store some calculated information to a cache file, which can dramatically improve loading times.
+				 - It runs on the hash of an image and takes up barely any space, so it's worthwile keeping activated.
+					Default: True
+	
+				uploadURLsToImgur
+				 - True/False
+				 - Used when uploading custom images is enabled
+				 - By default the code will check if the custom image is a link, and this adds a bit extra to check it's from Imgur.
+				 - If set to True and the image is from elsewhere, it will reupload the image.
+				 - You may want to disable this if you are using an image on your own website, otherwise it's best to keep it enabled to avoid 404 errors.
+					Default: True
+	
+				vO/validateOutput
+				 - True/False
+				 - Will read the output image to make sure the data exactly matches the input.
+				 - May slow down execution time if enabled.
+					Default: False
+	
+				returnURL/returnCustomURL
+				 - Add the custom image URL to the output list.
+				 - Not added by default as it'll be ImageStore().write()[1] without uploading the output image, or ImageStore().write()[2] if you do.
+				 - This is stored in the file anyway, so shouldn't really be needed
+	
+	
+				#MAYA
+	
+				i/c/image/customImage
+				 - String
+				 - Same as above, but set to "RenderView" to use the image in the renderView window
+	
+				rV/renderView/writeToRenderView
+				 - True/False
+				 - Will load the output image into the renderView window.
+				 - Currently not working as Maya seems to convert the image.
+	
+	
+				#DEBUGGING
+	
+				debug/debugResult/debugOutput
+				 - True/False 
+				 - Will set all stored information to blackand all other information to white
+				 - There should always be mostly white and some black, unless you are storing a very small amount of information.
+					Default: False
+	
+				cH/cutoffHelp/cutoffModeHelp
+				 - True/False
+				 - Output all cutoff modes and what they do
+					Default: False
+	
+				s/size/returnSize
+				 - True/False 
+				 - Return the input size.
+					Default: False
+	
+				returnInfo/getImageInfo
+				 - True/False 
+				 - Return maximum number of bytes the image can hold.
+					Default: False
+	
+				t/test/testImage
+				 - String
+				 - Return True/False depending on if custom image can be read from the path/URL.
+					Default: None
+	
+	
+	
+			If image was saved:
+				Return [[Path to image, (image url if uploaded) ], (same if multiple images were created)]
+			If error in saving image:
+				Return None
+	
+	
+	
+		def read( *args, **kwargs ):
+	
+			Args:
+				
+				(Path to custom image)
+				 - String
+				 - Use this path instead of stored URL for custom image. Won't work if it's not the exact same as the original image used to store data.
+				 - If the original image was uploaded and imgur resized/resampled it, only the URL will work, unless you saved the image again.
+					Default: None
+			
+			Kwargs:
+			
+				i/image/imagePath/customImage
+				 - String
+				 - Same as the path to custom image in args, this one will be given priority if set.
+					Default: None
+	
+				o/output/outputInformation
+				 - True/False
+				 - Print stored information within the file if it exists. If disableInfo was set to True, nothing will be shown.
+					Default: False
+	
+	
+				#DEBUGGING
+	
+				debug/debugResult/debugOutput
+				 - True/False/Integer
+				 - Print various information useful in testing if the correct information is stored.
+				 - By default it will output the stored files, length of data, type of data, and the first 100 characters (set to a number to modify the amount).
+				 - Note that it will still return the stored information, the only difference is it will print more information.
+					Default: False
+	
+	
+	
+			If image was read:
+				Return <stored data>
+			If error in reading image:
+				Return None
+	
+	
+	
+		def cache( **kwargs ):
+	
+			Kwargs:
+		
+				c/clean/cleanCache
+				 - True/False
+				 - Delete the cache file.
+					Default: False
+	
+				k/key/value
+				 - String (hash of image)
+				 - Return information related to the cached image as a list.
+					Default: None
+	
+				delKey/deleteKey
+				 - String (hash of image)
+				 - Attempt to remove information on an individual cached image.
+					Default: None
+				
+				p/path/cachePath
+				 - String
+				 - Return the location where the cache is stored.
+				 - It will still return the location even if no cache file exists.
+					Default: False
+	
+				h/hash/imageHash
+				 - True/None/String
+				 - Return the hash of the image.
+				 - If True is given, the image location passed to the main class will be used.
+					Default: None
+	
+	
+			If cache exists:
+				Return <cache dictionary>
+			If error somewhere:
+				Return None
 
 <br>
 
@@ -337,46 +338,42 @@ Reading the image simply reverses the process, but it requires every pixel to be
 
 <h4>Updates:</h4>
 
-v1:
-Manually wrote all the parts aside from the image library. Amazingly slow with any large amounts of data.
-
-v2:
-Entirely rewrote to use built in functions for a lot of the conversion. Very lightweight and relatively fast.
-
-v2.1
-Added support for imgur, so you may set the code to upload the image, or read any image but putting the URL as the file path.
-
-v2.2:
-Added in support to store files within the image, in preperation for custom images. 
-
-v3:
-Rewrote the code again to give the ability to use custom images. 
-By default this initial image will be uploaded and URL stored in the file, so it can be read without any extra user input.
-
-Custom images will take longer, as it'll decide the best and most efficient way to store the data.
-It will cache a small amount of information about an image after the first run, which on a 1080p image for example, equates to 50 million less calculations, or 9 billion fewer list lookups, so makes things quite a bit faster.
-The incorrect padding error should also be fully fixed now, and trying to store more data than an image can handle will revert to the basic method, but keep the same aspect ratio of the custom image.
-
-v3.1
-Input data is now compressed, and progress is output every few seconds as calculations can take a while.
-Added more cutoff modes, the option to use multiple cutoff modes, and another value that can be set to true to automatically use them all.
-The cache is now fixed to store each cutoff mode separately, instead of just the first one.
-
-v3.1.1
-Wrote some code to track stats, and cleaned up a lot of the URL checking.
-Added in debugging for reading images, it can display the first x decoded characters (any amount but 100 by default) and various other information about the image.
-If pyimgur or requests are not found, instead of throwing an error, it will just disable the upload capabilities and continue as normal.
-
-v3.1.2
-
-Made it a lot easier to force default values, which could be useful in an application.
-
-Putting a URL as the save path will attempt to use it as a custom image instead of throwing an error, and the cache function can return the hash of an image, to make it easier to locate in the cache.
-
-Fixed various other bugs such as black and white images crashing the code.
-
-v3.1.2
-Added in Maya specific code to use the render view window.
+	v1:
+	Manually wrote all the parts aside from the image library. Amazingly slow with any large amounts of data.
+	
+	v2:
+	Entirely rewrote to use built in functions for a lot of the conversion. Very lightweight and relatively fast.
+	
+	v2.1
+	Added support for imgur, so you may set the code to upload the image, or read any image but putting the URL as the file path.
+	
+	v2.2:
+	Added in support to store files within the image, in preperation for custom images. 
+	
+	v3:
+	Rewrote the code again to give the ability to use custom images. 
+	By default this initial image will be uploaded and URL stored in the file, so it can be read without any extra user input.
+	Custom images will take longer, as it'll decide the best and most efficient way to store the data.
+	It will cache a small amount of information about an image after the first run, which on a 1080p image for example, equates to 50 million less calculations, or 9 billion fewer list lookups, so makes things quite a bit faster.
+	The incorrect padding error should also be fully fixed now, and trying to store more data than an image can handle will revert to the basic method, but keep the same aspect ratio of the custom image.
+	
+	v3.1:
+	Input data is now compressed, and progress is output every few seconds as calculations can take a while.
+	Added more cutoff modes, the option to use multiple cutoff modes, and another value that can be set to true to automatically use them all.
+	The cache is now fixed to store each cutoff mode separately, instead of just the first one.
+	
+	v3.1.1:
+	Wrote some code to track stats, and cleaned up a lot of the URL checking.
+	Added in debugging for reading images, it can display the first x decoded characters (any amount but 100 by default) and various other information about the image.
+	If pyimgur or requests are not found, instead of throwing an error, it will just disable the upload capabilities and continue as normal.
+	
+	v3.1.2:
+	Made it a lot easier to force default values, which could be useful in an application.
+	Putting a URL as the save path will attempt to use it as a custom image instead of throwing an error, and the cache function can return the hash of an image, to make it easier to locate in the cache.
+	Fixed various other bugs such as black and white images crashing the code.
+	
+	v3.1.3:
+	Added in Maya specific code to use the render view window.
 
 <br>
 
