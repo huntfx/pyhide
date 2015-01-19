@@ -117,7 +117,7 @@ class ImageStore:
     maxCutoffModes = 7
     website = "http://peterhuntvfx.co.uk"
     protocols = ["http://", "https://"]
-    debugging = False
+    debugging = True
     
     #Maya
     renderViewSaveLocation = "{0}/RenderViewTemp".format( defaultCacheDirectory )
@@ -146,17 +146,17 @@ class ImageStore:
         self.kwargs = kwargs
         self.printProgress = checkInputs.checkBooleanKwargs( kwargs, True, 'p', 'print', 'printProgress', 'printOutput', 'o', 'output', 'outputProgress' )
 
-def cleanTempFiles( self ):
-    self.renderView( False )
+    def cleanTempFiles( self ):
+        self.renderView( False )
 
-def write( self, *args, **kwargs ):
+    def write( self, *args, **kwargs ):
         
         results = self.actualWrite( *args, **kwargs )
         self.cleanTempFiles()
         
         return results
 
-def read( self, *args, **kwargs ):
+    def read( self, *args, **kwargs ):
         
         results = self.actualRead( *args, **kwargs )
         self.cleanTempFiles
@@ -291,7 +291,7 @@ def read( self, *args, **kwargs ):
                             usedRenderView = True
                             if customImageInput != None:
                                 usedRenderViewImage = True
-                                returnCustomImageURL = True
+                                #returnCustomImageURL = True
                                 break
                             else:
                                 self.renderView( False )
@@ -536,7 +536,7 @@ def read( self, *args, **kwargs ):
         
         customImageExtension = customImageInputPath.split( "." )[-1].lower()
         
-        if customImageExtension in formatList.keys() and customImageExtension not in ignoreFormats:
+        if ( customImageExtension in formatList.keys() ) and customImageExtension not in ignoreFormats:
             
             if self.printProgress == True:
                 try:
@@ -546,8 +546,13 @@ def read( self, *args, **kwargs ):
                         imageType = formatList[customImageExtension]
                 except:
                     imageType = customImageExtension.upper()
-                
+                                    
                 if customImageExtension not in ignoreFormats:
+                
+                    #Fix for V-Ray
+                    if py.getAttr( "defaultRenderGlobals.imageFormat" ) == 52:
+                        imageType = "V-Ray " + imageType
+                        
                     print "Reason: {0} files not supported.".format( imageType )
                 
                 if mayaEnvironment == True and usedRenderView == True:
@@ -1105,8 +1110,21 @@ def read( self, *args, **kwargs ):
                 except:
                     pass
         
-        #Get image
-        imageInput = self.readImage( self.imageName )
+        #Get image, try from args first then use the main image location value
+        #Avoids the default location overriding the args value
+        useArgsForImageRead = True
+        try:
+            if len( args ) > 0 and useArgsForImageRead == True:
+                imageInput = self.readImage( args[0] )
+                self.imageName = args[0]
+            else:
+                imageInput = None
+            if imageInput == None:
+                raise ImageStoreError()
+                
+        except:
+            imageInput = self.readImage( self.imageName )
+            
         if imageInput == None:
             if self.printProgress == True:
                 print "Error: Unable to read image."
@@ -1173,12 +1191,6 @@ def read( self, *args, **kwargs ):
         usedDifferentOriginalImage = False
         if useCustomImageMethod == True:
         
-            #Store pixel info
-            imageInput = self.readImage( self.imageName )
-            rawData = []
-            for pixels in imageInput.getdata():
-                for rgb in range( 3 ):
-                    rawData.append( pixels[rgb] )
             
             #Use other custom image
             validArgs = checkInputs.validKwargs( kwargs, 'i', 'cI', 'img', 'image', 'URL', 'imgURL', 'imgPath', 'imgLoc', 'imgLocation', 'imageURL', 'imageLoc', 'imagePath', 'imageLocation', 'customImg', 'customImage', 'customImgURL', 'customImageURL', 'customImgPath', 'customImagePath', 'customImgLoc', 'customImageLoc', 'customImgLocation', 'customImageLocation' )
@@ -1188,14 +1200,7 @@ def read( self, *args, **kwargs ):
                     originalImage = self.readImage( kwargs[validArgs[i]] )
                 except:
                     originalImage = None
-            
-            #Try read from args instead
-            if originalImage == None:
-                try:
-                    originalImage = self.readImage( args[0] )
-                except:
-                    originalImage = None
-            
+                        
             if len( validArgs ) > 0 and originalImage == None:
             
                 if self.printProgress == True:
@@ -1461,7 +1466,7 @@ def read( self, *args, **kwargs ):
         renderViewFormat = {}
         renderViewFormat[0] = ["gif", "GIF"]
         renderViewFormat[1] = ["pic", "SoftImage"]
-        renderViewFormat[2] = ["rla", "RLA"]
+        renderViewFormat[2] = ["rla", "Wavefront"]
         renderViewFormat[3] = ["tif", "Tiff"]
         renderViewFormat[4] = ["tif", "Tiff16", True]
         renderViewFormat[5] = ["sgi", "SGI"]
@@ -1471,7 +1476,7 @@ def read( self, *args, **kwargs ):
         renderViewFormat[9] = ["eps", "EPS"]
         renderViewFormat[10] = ["iff", "Maya16 IFF", True]
         renderViewFormat[11] = ["cin", "Cineon"]
-        renderViewFormat[12] = ["yuv", "Quantel"]
+        renderViewFormat[12] = ["yuv", "Quantel PAL"]
         renderViewFormat[13] = ["sgi", "SGI16", True]
         renderViewFormat[19] = ["tga", "Targa"]
         renderViewFormat[29] = ["bmp", "Windows Bitmap"]
@@ -1480,9 +1485,11 @@ def read( self, *args, **kwargs ):
         renderViewFormat[32] = ["png", "PNG"]
         renderViewFormat[35] = ["dds", "DirectDraw Surface"]
         renderViewFormat[36] = ["psd", "PSD Layered", True]
-        renderViewFormat[100] = ["jpeg", "JPEG"]
+        renderViewFormat[51] = ["mr", "Mental Ray", True] #Mental Ray groups lots of formats under 51
+        renderViewFormat[52] = ["vr", "V-Ray", True] #V-Ray uses it's own formats so this is a placeholder
         
         #Add any extra after here, only useful for the errors
+        renderViewFormat[100] = ["jpeg", "JPEG"]
         renderViewFormat[101] = ["psb", "Large Document Format"]
         renderViewFormat[102] = ["3ds","3D Studio"]
         renderViewFormat[103] = ["ma", "Maya Ascii"]
@@ -1510,6 +1517,7 @@ def read( self, *args, **kwargs ):
         renderViewFormat[128] = ["xyze", "Radiance"]
         renderViewFormat[129] = ["sct", "Scitex CT"]
         renderViewFormat[130] = ["tiff", "Tiff"]
+        renderViewFormat[131] = ["img", "V-Ray Image"]
         renderViewFormat[200] = ["3fr", "Hasselblad Raw"]
         renderViewFormat[201] = ["fff", "Hasselblad Raw"]
         renderViewFormat[202] = ["ari", "ARRIFLEX Raw"]
@@ -1546,6 +1554,63 @@ def read( self, *args, **kwargs ):
         renderViewFormat[233] = ["rwz", "Rawzor Raw"]
         renderViewFormat[234] = ["srw", "Samsung Raw"]
         renderViewFormat[235] = ["x3f", "Sigma Raw"]
+        
+        mentalRayFormats = {}
+        mentalRayFormats["tifu"] = ["TIFF uncompressed"]
+        mentalRayFormats["hdr"] = ["HDR"]
+        mentalRayFormats["exr"] = [renderViewFormat[123][1], True]
+        mentalRayFormats["picture"] = ["Dassault"]
+        mentalRayFormats["ppm"] = ["Portable Pixmap"]
+        mentalRayFormats["ps"] = ["PostScript"]
+        mentalRayFormats["qntntsc"] = ["Quantel NTSC"]
+        mentalRayFormats["ct"] = ["mentalray Color"]
+        mentalRayFormats["st"] = ["mentalray Alpha"]
+        mentalRayFormats["nt"] = ["mentalray Normal"]
+        mentalRayFormats["mt"] = ["mentalray Motion"]
+        mentalRayFormats["zt"] = ["mentalray Depth"]
+        mentalRayFormats["tt"] = ["mentalray Tag"]
+        mentalRayFormats["bit"] = ["mentalray Bit"]
+        mentalRayFormats["cth"] = ["mentalray HDR"]
+        
+        VRayFormats = {}
+        VRayFormats[1] = renderViewFormat[8]
+        VRayFormats[2] = renderViewFormat[32]
+        VRayFormats[3] = ["vrimg", "V-Ray Image"]
+        VRayFormats[4] = renderViewFormat[123]
+        VRayFormats[5] = ["exr", "OpenEXR (multichannel)", True]
+        VRayFormats[6] = renderViewFormat[19]
+        VRayFormats[7] = renderViewFormat[29]
+        VRayFormats[8] = renderViewFormat[5]
+        VRayFormats[9] = renderViewFormat[3]
+        
+        #Find current renderer
+        try:
+            allRenderers = py.renderer( q=True, namesOfAvailableRenderers=True ) #Not needed but leaving here in case it comes in useful
+            currentRenderer = py.getAttr( "defaultRenderGlobals.currentRenderer") #mayaSoftware/mayaHardware/mayaHardware2/mentalRay/vray
+        except:
+            currentRenderer = None
+        
+        #Assign MR setting to index 51
+        if currentRenderer == "mentalRay":
+            try:
+                sceneExtension = py.getAttr( "defaultRenderGlobals.imfkey" ).lower()
+                if py.getAttr( "defaultRenderGlobals.imageFormat" ) == 51 and sceneExtension in mentalRayFormats.keys():
+                    renderViewFormat[51] = [[sceneExtension] + mentalRayFormats[sceneExtension]]
+            except:
+                pass
+        
+        #Assign V-Ray setting to index 52
+        if currentRenderer == "vray":
+            try:
+                py.setAttr( "defaultRenderGlobals.imageFormat", 52 )
+                vRayFormat = py.getAttr( "vraySettings.imageFormatStr" )
+                vRayFormatList = dict( [[value[0],value] for key, value in VRayFormats.iteritems()] )
+                renderViewFormat[52] = vRayFormatList[ py.getAttr( "vraySettings.imageFormatStr" ) ]
+                
+            except:
+                pass
+        
+        
         ignoreFormats = [8, 29, 31, 32, 100]
         uploadFormats = [0, 8, 29, 32, 100]
         
@@ -1751,6 +1816,9 @@ def read( self, *args, **kwargs ):
         
     def renderView( self, save = True ):
         
+        renderViewFormat, ignoreFormats, uploadFormats = self.imageFormats()
+        formatList = dict( [[item[0], key] for key, item in renderViewFormat.iteritems() if len( item ) == 2] )
+        
         #To get around True = 1 and False = 0
         valueType = type( save )
         
@@ -1762,7 +1830,7 @@ def read( self, *args, **kwargs ):
                     self.renderViewSaveLocation = py.renderWindowEditor( 'renderView', edit = True, writeImage = self.renderViewSaveLocation )[1]
                 except:
                     pass
-            
+                    
             #Delete file
             elif save == False:
                 try:
@@ -1770,10 +1838,11 @@ def read( self, *args, **kwargs ):
                 except:
                     pass
                 
-        elif valueType == int:
+        elif valueType == int or ( valueType == str and valueType.isdigit() ):
             try:
                 if 0 <= int( save ) < 64:
                     py.setAttr( "defaultRenderGlobals.imageFormat", int( save ) )
+                    py.setAttr( "defaultRenderGlobals.imfkey", renderViewFormat[int( save )] )
                 else:
                     raise RangeError( "value must be between 0 and 63" )
             except:
@@ -1782,13 +1851,11 @@ def read( self, *args, **kwargs ):
         
         elif valueType == str:
             
-            renderViewFormat, ignoreFormats, uploadFormats = self.imageFormats()
-            formatList = dict( [[item[0], key] for key, item in renderViewFormat.iteritems() if len( item ) == 2] )
-            
             if save.lower() in formatList.keys():
             
                 try:
                     py.setAttr( "defaultRenderGlobals.imageFormat", formatList[save.lower()] )
+                    py.setAttr( "defaultRenderGlobals.imfkey", save.lower() )
                 except:
                     print "Error: Can't update scene settings."
             
