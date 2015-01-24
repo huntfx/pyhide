@@ -1,11 +1,12 @@
 import pymel.core as py
 import os, math
+import maya.utils as utils
 import ImageStore
 reload( ImageStore )
 from ImageStore import ImageStore
 
 
-class UserInterface:
+class MayaUserInterface:
     
     
     windowName = "ImageStore"
@@ -28,7 +29,7 @@ class UserInterface:
         if py.window( self.windowName, exists = True ):
             py.deleteUI( self.windowName, window = True )
         
-        mainWindow = py.window( self.windowName, title = self.windowName, resizeToFitChildren = True, minimizeButton = True, maximizeButton = False, sizeable = False, width = self.windowWidth, restoreCommand = "UserInterface.changeSceneSettings()" )
+        mainWindow = py.window( self.windowName, title = self.windowName, resizeToFitChildren = True, minimizeButton = True, maximizeButton = False, sizeable = False, width = self.windowWidth, restoreCommand = py.Callback( self.changeSceneSettings ) )
         
         with py.rowColumnLayout( numberOfColumns = 1 ):
             py.text( label = "Use this to store or read information within images. They can be uploaded anywhere and read from other computers.", align = "left" )
@@ -40,7 +41,7 @@ class UserInterface:
             py.text( label = "", width = self.windowWidth/100*1 )
             py.text( label = "", width = self.windowWidth/100*25 )
             py.text( label = "", width = self.windowWidth/100*1 )
-            self.textList["ValidateMainImage"] = py.text( label = "0", width = self.windowWidth/100*21 )
+            self.textList["ValidateMainImage"] = py.text( label = "0", width = self.windowWidth/100*21, visible = False )
             py.text( label = "", width = self.windowWidth/100*1 )
             py.text( label = "" )
             self.textFieldList["MainImagePath"] = py.textField( text = "{0}/{1}".format( ImageStore.defaultImageDirectory, ImageStore.defaultImageName ), annotation = "Choose a path to save the file to, or a path or URL to read a file from" )
@@ -60,7 +61,7 @@ class UserInterface:
             py.text( label = "" )
             
             with py.rowColumnLayout( numberOfColumns = 2 ):
-                self.checkBoxList["ImagePathExists"] = py.checkBox( label = "Exists", editable = False )
+                self.checkBoxList["ImagePathExists"] = py.checkBox( label = "Image", editable = False )
                 self.checkBoxList["ImagePathWriteable"] = py.checkBox( label = "Writeable", editable = False )
                 
             py.text( label = "" )
@@ -70,7 +71,7 @@ class UserInterface:
             py.text( label = "" )
             py.text( label = "" )
             py.text( label = "" )
-            self.textList["ValidateCustomImage"] = py.text( label = "0" )
+            self.textList["ValidateCustomImage"] = py.text( label = "0", visible = False )
             py.text( label = "" )
             py.text( label = "" )
             self.textFieldList["CustomImagePath"] = py.textField( text = "http://images.peterhuntvfx.co.uk/music.jpg", annotation = "Choose a path or URL to an image (optional)" )
@@ -89,8 +90,9 @@ class UserInterface:
             
             py.text( label = "" )
             with py.rowColumnLayout( numberOfColumns = 2 ):
-                py.button( label = "Browse", command = py.Callback( self.fileReading, False, True, "textField", "customImagePath" ), visible = False )
                 
+                #Important button for reading
+                self.buttonList["Deferred"] = py.button( label = "Browse", visible = False )
                 
                 with py.rowColumnLayout( numberOfColumns = 3 ):
                     self.buttonList["RenderView"] = {}
@@ -373,12 +375,21 @@ class UserInterface:
                 returnSomeData = 100000
             else:
                 returnSomeData = int( returnSomeData )
+        kwargs["OutputInformation"] = True
+        
+        
+        mainKwargs = {}
+        mainKwargs["ScrollField"] = self.scrollFieldList["OutputProgress"]
+        mainKwargs["ProgressBarName"] = self.progressBarList["ProgressBar"]
+        mainKwargs["progressBarText"] = self.textList["ProgressBar"]
+        mainKwargs["DeferredWriteCommand"] = self.deferredWrite
+        
         
         outputData = None
         if py.text( self.textList["ValidateMainImage"], query = True, label = True ) != "1":
             py.button( self.buttonList["ValidateMainImage"], query = True, command = True )()
         if py.checkBox( self.checkBoxList["ImagePathExists"], query = True, value = True ):
-            outputData = ImageStore( imagePath ).read( **kwargs )
+            outputData = ImageStore( imagePath, **mainKwargs ).read( **kwargs )
         
         if not outputData:
             outputData = "Unable to read image"
@@ -394,11 +405,14 @@ class UserInterface:
         imagePath = py.textField( self.textFieldList["MainImagePath"], query = True, text = True )
         customImagePath = py.textField( self.textFieldList["CustomImagePath"], query = True, text = True )
         disableCustomImage = py.checkBox( self.checkBoxList["DisableCustomImage"], query = True, value = True )
+        if disableCustomImage:
+            customImagePath = None
         
         #Make sure custom image is valid
-        if py.text( self.textList["ValidateCustomImage"], query = True, label = True ) != "1":
-            py.button( self.buttonList["ValidateCustomImage"], query = True, command = True )()
-        if py.text( self.textList["ValidateCustomImage"], query = True, label = True ) == "1":
+        if customImagePath:
+            if py.text( self.textList["ValidateCustomImage"], query = True, label = True ) != "1":
+                py.button( self.buttonList["ValidateCustomImage"], query = True, command = True )()
+        if py.text( self.textList["ValidateCustomImage"], query = True, label = True ) == "1" or not customImagePath:
             kwargs["CustomImagePath"] = customImagePath
         
         kwargs["Input"] = self.validateInput( None, True )
@@ -426,7 +440,17 @@ class UserInterface:
         kwargs["returnCustomImageURL"] = py.checkBox( self.checkBoxList["ReturnCustomURL"], query = True, value = True )
         kwargs["debugOutput"] = py.checkBox( self.checkBoxList["DebugData"], query = True, value = True )
         
-        outputLocations = ImageStore( imagePath, scrollField = self.scrollFieldList["OutputProgress"], progressBarName = self.progressBarList["ProgressBar"], progressBarText = self.textList["ProgressBar"] ).write( **kwargs )
+        mainKwargs = {}
+        mainKwargs["ScrollField"] = self.scrollFieldList["OutputProgress"]
+        mainKwargs["ProgressBarName"] = self.progressBarList["ProgressBar"]
+        mainKwargs["progressBarText"] = self.textList["ProgressBar"]
+        mainKwargs["DeferredWriteCommand"] = self.deferredWrite
+        #ImageStore( imagePath, **mainKwargs ).write( **kwargs )
+        utils.executeDeferred( ImageStore( imagePath, **mainKwargs ).write, **kwargs )
+        
+    @classmethod
+    def deferredWrite( self, outputLocations, returningCustomURL = False ):
+        
         
         imagePaths = []
         imageURLs = []
@@ -435,10 +459,12 @@ class UserInterface:
             for i in range( len( outputLocations ) ):
                 currentImagePath = outputLocations[i]
                 imagePaths.append( currentImagePath[0] )
-                if len( currentImagePath ) == 3 or ( len( currentImagePath ) == 2 and kwargs["returnCustomImageURL"] == False ):
-                    imageURLs.append( currentImagePath[1] )
-                elif len( currentImagePath ) > 1:
-                    customURL.append( currentImagePath[-1] )
+                if len( currentImagePath ) > 1:
+                    if returningCustomURL == True:
+                        customURL.append( currentImagePath[-1] )
+                    if len( currentImagePath ) - int( returningCustomURL ) == 2:
+                        imageURLs.append( currentImagePath[1] )
+                        
         if len( imagePaths ) == 0:
             imagePaths.append( "Image wasn't saved" )
         
@@ -446,6 +472,7 @@ class UserInterface:
         py.textField( self.textFieldList["OutputURL"], edit = True, text = ", ".join( imageURLs ) )
         py.textField( self.textFieldList["OutputCustomURL"], edit = True, text = ", ".join( list( set( customURL ) ) ) )
         py.frameLayout( self.frameLayoutList["OutputWrite"], edit = True, collapse = False )
+        
     
     @classmethod
     def calculateSizeOfInput( self ):
@@ -472,7 +499,7 @@ class UserInterface:
         content = None
         if imageLocation:
             
-            imageSize = ImageStore().write( customImage = imageLocation, getImageSize = True )
+            imageSize = ImageStore( imageLocation, scrollField = self.scrollFieldList["OutputProgress"], progressBarName = self.progressBarList["ProgressBar"], progressBarText = self.textList["ProgressBar"] ).write( customImage = imageLocation, getImageSize = True )
             
             if imageSize:
                 content = "Image can store up to around {0} bytes ({1}kb)".format( imageSize, int( imageSize )/1024 )
@@ -730,14 +757,18 @@ class UserInterface:
         #Get image information
         imageLocation = ImageStore().getImageLocation( py.textField( self.textFieldList["CustomImagePath"], query = True, text = True ) )
         imageHash = ImageStore( imageLocation ).cache( MD5 = True )
+        disableCustomImage = py.checkBox( self.checkBoxList["DisableCustomImage"], query = True, value = True )
+        if disableCustomImage == True:
+            imageLocation = None
         
         #Test custom image
         valid = ImageStore( cleanTemporaryFiles = False ).write( testCustomImage = True, customImageLocation = imageLocation )
-
-        if valid == True or py.textField( self.textFieldList["CustomImagePath"], query = True, text = True ) == "":
-            self.validButton( "ValidateCustomImage", True )
-        else:
-            self.validButton( "ValidateCustomImage", False )
+        
+        if imageLocation or py.button( self.buttonList["ValidateCustomImage"], query = True, label = True ) == "Invalid":
+            if valid == True or py.textField( self.textFieldList["CustomImagePath"], query = True, text = True ) == "":
+                self.validButton( "ValidateCustomImage", True )
+            else:
+                self.validButton( "ValidateCustomImage", False )
         
         #Read image
         if ImageStore().readImage( imageLocation ):
@@ -867,9 +898,7 @@ class UserInterface:
         
         return filePath
 
-import maya.utils 
-import maya.cmds
-def doSphere():
-	UserInterface.display()
-maya.utils.executeDeferred( doSphere )
-        
+
+if __name__ == '__main__':
+    if mayaEnvironment == True:
+        MayaUserInterface.display()
