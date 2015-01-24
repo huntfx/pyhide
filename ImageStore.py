@@ -1,9 +1,8 @@
 '''
 Author: Peter Hunt
 Website: peterhuntvfx.co.uk
-Version: 3.1.3
+Version: 3.2
 '''
-
 #You can edit these values, but they lack error checking so be careful
 def defaults():
 
@@ -55,7 +54,7 @@ from random import randint
 from subprocess import call
 from time import time, sleep
 from datetime import datetime
-import cPickle, base64, urllib2, cStringIO, os, webbrowser, zipfile, getpass, zlib, operator, re, math, md5, itertools
+import cPickle, base64, urllib2, cStringIO, os, webbrowser, zipfile, getpass, zlib, operator, re, math, md5, itertools, inspect
 
 #Disable upload features if requests and pyimgur are not found
 printImportError = True #Set this to false if you want to disable the warning if pyimgur or requests are not found
@@ -79,6 +78,7 @@ global mayaEnvironment
 mayaEnvironment = False
 try:
     import pymel.core as py
+    import maya.utils as utils
     mayaEnvironment = True
 except:
     pass
@@ -114,11 +114,12 @@ class ImageStore:
                 
     imageDataPadding = [116, 64, 84, 123, 93, 73, 106]
     firstPixelPadding = [92, 101]
-    versionNumber = "3.1.3"
+    versionNumber = "3.2"
     maxCutoffModes = 7
     website = "http://peterhuntvfx.co.uk"
     protocols = ["http://", "https://"]
-    debugging = True
+    debugging = False
+    validateWrite = False
     
     #Maya
     renderViewSaveLocation = "{0}/RenderViewTemp".format( defaultCacheDirectory )
@@ -141,7 +142,17 @@ class ImageStore:
     writeProgress["SavingImage"] = 97
     writeProgress["WritingExtraInformation"] = 98
     writeProgress["Validate"] = 100
-    
+    readProgress = {}
+    readProgress["ReadingImage"] = 0
+    readProgress["ReadingFiles"] = 6
+    readProgress["FilesStored"] = 8
+    readProgress["StoringPixels"] = 20
+    readProgress["FirstPixel"] = 21
+    readProgress["StoringCustomPixelInfo"] = 40
+    readProgress["ReadingData"] = 75
+    readProgress["TruncatingEnd"] = 90
+    readProgress["Decoding"] = 100
+        
     def __init__( self, *args, **kwargs ):
     
         if len( args ) == 0:
@@ -183,35 +194,48 @@ class ImageStore:
         self.cleanTemporaryFiles = checkInputs.checkBooleanKwargs( kwargs, True, 'c', 'cleanFiles', 'tempFiles', 'cleanTempFiles', 'temporaryFiles', 'cleanTemporaryFiles' )
         
         #For updating progress
-        validArgs = checkInputs.validKwargs( kwargs, 'scrollField', 'scrollFieldToUpdate' )
-        self.scrollFieldToUpdate = None
-        for i in range( len( validArgs ) ):
-            try:
-                py.scrollField( kwargs[validArgs[i]], query = True, text = True )
-                self.scrollFieldToUpdate = kwargs[validArgs[i]]
-                break
-            except:
-                pass
+        if mayaEnvironment == True:
+            validArgs = checkInputs.validKwargs( kwargs, 'scrollField', 'scrollFieldToUpdate' )
+            self.scrollFieldToUpdate = None
+            for i in range( len( validArgs ) ):
+                try:
+                    py.scrollField( kwargs[validArgs[i]], query = True, text = True )
+                    self.scrollFieldToUpdate = kwargs[validArgs[i]]
+                    break
+                except:
+                    pass
+                    
+            validArgs = checkInputs.validKwargs( kwargs, 'progressBar', 'progressBarName' )
+            self.progressBar = None
+            for i in range( len( validArgs ) ):
+                try:
+                    py.progressBar( kwargs[validArgs[i]], query = True, progress = True )
+                    self.progressBar = kwargs[validArgs[i]]
+                    break
+                except:
+                    pass
+                    
+            validArgs = checkInputs.validKwargs( kwargs, 'progressBarText' )
+            self.progressBarText = None
+            for i in range( len( validArgs ) ):
+                try:
+                    py.text( kwargs[validArgs[i]], query = True, label = True )
+                    self.progressBarText = kwargs[validArgs[i]]
+                    break
+                except:
+                    pass
+                    
+            validArgs = checkInputs.validKwargs( kwargs, 'callbackWrite', 'callbackWriteCommand', 'deferredWrite', 'deferredWriteCommand' )
+            self.callbackWrite = None
+            for i in range( len( validArgs ) ):
+                try:
+                    if inspect.ismethod( kwargs[validArgs[i]] ):
+                        self.callbackWrite = kwargs[validArgs[i]]
+                        break
+                except:
+                    pass
                 
-        validArgs = checkInputs.validKwargs( kwargs, 'progressBar', 'progressBarName' )
-        self.progressBar = None
-        for i in range( len( validArgs ) ):
-            try:
-                py.progressBar( kwargs[validArgs[i]], query = True, progress = True )
-                self.progressBar = kwargs[validArgs[i]]
-                break
-            except:
-                pass
-                
-        validArgs = checkInputs.validKwargs( kwargs, 'progressBarText' )
-        self.progressBarText = None
-        for i in range( len( validArgs ) ):
-            try:
-                py.text( kwargs[validArgs[i]], query = True, label = True )
-                self.progressBarText = kwargs[validArgs[i]]
-                break
-            except:
-                pass
+        
         
         
     def getImageLocation( self, input ):
@@ -229,21 +253,34 @@ class ImageStore:
         else:
             return None
     
-    def printCurrentProgress( self, text, display = True, percentComplete = None ):
-        if self.printProgress == True:
-            print text
+    def updateMayaUI( self, text, display, percentComplete ):
+    
+        if self.progressBar:
+            if not percentComplete:
+                percentComplete = py.progressBar( self.progressBar, query = True, progress = True )
+            py.progressBar( self.progressBar, edit = True, progress = percentComplete )
             
-        if mayaEnvironment == True and self.scrollFieldToUpdate:
-            try:
-                if percentComplete:
-                    py.progressBar( self.progressBar, edit = True, progress = percentComplete )
-                if display:
-                    py.text( self.progressBarText, edit = True, label = text )
-                    currentText = py.scrollField( self.scrollFieldToUpdate, query = True, text = True )
-                    currentText = "{0}{1}{2}".format( text, GlobalValues.newLine, currentText )
-                    py.scrollField( self.scrollFieldToUpdate, edit = True, text = currentText )
-            except:
-                pass
+        if display:
+        
+            if self.progressBarText:
+                py.text( self.progressBarText, edit = True, label = text )
+                
+            if self.scrollFieldToUpdate:
+                currentText = py.scrollField( self.scrollFieldToUpdate, query = True, text = True )
+                currentText = "{0}{1}{2}".format( text, GlobalValues.newLine, currentText )
+                py.scrollField( self.scrollFieldToUpdate, edit = True, text = currentText )
+    
+    def printCurrentProgress( self, text, display = True, percentComplete = None ):
+    
+        if not self.validateWrite:
+            if mayaEnvironment == True:
+                
+                #utils.executeDeferred( self.updateMayaUI, text, display, percentComplete )
+                self.updateMayaUI( text, display, percentComplete )
+                
+            if self.printProgress == True:
+                print text
+                    
     
     def cleanTempFiles( self ):
         if self.cleanTemporaryFiles == True:
@@ -252,10 +289,10 @@ class ImageStore:
     def write( self, *args, **kwargs ):
         
         if mayaEnvironment == True:
-            try:
+            if self.progressBarText:
+                py.text( self.progressBarText, edit = True, label = "Setting up variables..." )
+            if self.progressBar:
                 py.progressBar( self.progressBar, edit = True, progress = 0 )
-            except:
-                pass
         results = self.actualWrite( *args, **kwargs )
         self.cleanTempFiles()
         
@@ -265,7 +302,8 @@ class ImageStore:
         
         if mayaEnvironment == True:
             try:
-                py.progressBar( self.progressBar, edit = True, progress = 0 )
+                if not self.validateWrite:
+                    py.progressBar( self.progressBar, edit = True, progress = 0 )
             except:
                 pass
         results = self.actualRead( *args, **kwargs )
@@ -274,6 +312,8 @@ class ImageStore:
         return results
         
     def actualWrite( self, *args, **kwargs ):
+    
+        #self.printCurrentProgress( "Setting up variables...", True, 0 )
     
         input = None
         if len( args ) > 0:
@@ -701,6 +741,9 @@ class ImageStore:
             customImageInputPath = ""
             useCustomImageMethod = False
         
+        if input and returnCustomImageInfo == False:
+            self.printCurrentProgress( "Encoding input data...", True, self.writeProgress["CalculatingInputSize"] )
+            
         #Print how large the input data is
         if not input and returnCustomImageInfo == False:
             self.printCurrentProgress( "Error: Input data is required" )
@@ -708,8 +751,7 @@ class ImageStore:
         
         elif returnCustomImageInfo == False:
         
-            if returnCustomImageInfo == False:
-                self.printCurrentProgress( "Encoding input data...", True, self.writeProgress["CalculatingInputSize"] )
+            
             inputData = self.encodeData( input, binary = useCustomImageMethod )
             lengthOfInputData = len( inputData )
             
@@ -729,7 +771,7 @@ class ImageStore:
         if useCustomImageMethod == True:
             
             if returnCustomImageInfo == False:
-                self.printCurrentProgress( "Checking image has enough pixels to store the input data. This may take a while.", True, self.writeProgress["CheckingImage"] )
+                self.printCurrentProgress( "Checking image has enough pixels to store the input data.", True, self.writeProgress["CheckingImage"] )
             
             bitsPerPixel = 6
             
@@ -772,6 +814,9 @@ class ImageStore:
                 nextTime = time()+self.outputProgressTime
                 minPercent = self.writeProgress["CheckingImage"]
                 maxPercent = self.writeProgress["CalculatingCutoffMode"]
+                if returnCustomImageInfo == True:
+                    minPercent = 0
+                    maxPercent = 65
                 for pixels in customImageInput.getdata():
                     
                     #Output progress
@@ -798,8 +843,9 @@ class ImageStore:
                     cutoffMode = bestCutoffMode
                 else:
                     cutoffMode = storedCutoffMode
-                      
-                self.printCurrentProgress( "Using storing mode {0}.".format( cutoffMode ), True, self.writeProgress["UsingCutoffMode"] )
+                
+                if not returnCustomImageInfo:
+                    self.printCurrentProgress( "Using storing mode {0}.".format( cutoffMode ), True, self.writeProgress["UsingCutoffMode"] )
                 self.printCurrentProgress( "Calculating how much data can be stored for different amounts of bits using this mode...", True, self.writeProgress["UsingCutoffMode"] )
                 
                 #Find maximum size image can store for bits per colour
@@ -811,6 +857,9 @@ class ImageStore:
                 
                 minPercent = self.writeProgress["UsingCutoffMode"]
                 maxPercent = self.writeProgress["CalculatingMaxImageData"]
+                if returnCustomImageInfo:
+                    minPercent = 65
+                    maxPercent = 100
                 for i in range( 8 ):
                                             
                     bitsPerPixel = i+1
@@ -858,7 +907,10 @@ class ImageStore:
             
             #Get maximum bytes per bits
             imageBytes = validPixels[cutoffMode][ bitsPerPixelMax ]
-            self.printCurrentProgress( "Image can store up to around {0} bytes ({1}kb)".format( imageBytes, imageBytes/1024 ), True, self.writeProgress["ImageCanStore"] )
+            imageCanStorePercent = self.writeProgress["ImageCanStore"]
+            if returnCustomImageInfo:
+                imageCanStorePercent = 100
+            self.printCurrentProgress( "Image can store up to around {0} bytes ({1}kb)".format( imageBytes, imageBytes/1024 ), True, imageCanStorePercent )
             
             if returnCustomImageInfo == False:
                 inputBytes = ( len( inputData )*8 )/bitsPerPixelMax+3
@@ -866,10 +918,12 @@ class ImageStore:
             
                 if inputBytes > imageBytes:
                     outputText += ", which is currently more than the image can hold."
-                    outputText += "{0}Attempting to find a valid value by calculating the other levels.".format( GlobalValues.newLine )
+                    self.printCurrentProgress( outputText, True, self.writeProgress["InputAtMax"] )
+                    outputText = "Attempting to find a valid value by calculating the other levels.".format( GlobalValues.newLine )
                     
                 else:
-                    outputText += ", now attempting to find the minumum valid value to store the data."
+                    self.printCurrentProgress( outputText, True, self.writeProgress["InputAtMax"] )
+                    outputText = "Now attempting to find the minumum valid value to store the data."
                 
                 self.printCurrentProgress( outputText, True, self.writeProgress["InputAtMax"] )
             
@@ -1180,15 +1234,12 @@ class ImageStore:
             
             
             #Check the output
+            self.validateWrite = True
             if validateOutput == True:
                 
                 self.printCurrentProgress( "Validating saved image...", True, self.writeProgress["Validate"] )
             
                 #Stop reading printing anything
-                tempDisablePrint = False
-                if self.printProgress == True:
-                    tempDisablePrint = True
-                    self.printProgress = False
                     
                 try:
                     if self.read() != input:
@@ -1197,12 +1248,12 @@ class ImageStore:
                         
                     else:
                     
-                        self.printProgress = tempDisablePrint
+                        self.validateWrite = False
                         self.printCurrentProgress( "Successfully validated the data.", True, self.writeProgress["Validate"] )
                         
                 except:
                 
-                    self.printProgress = tempDisablePrint
+                    self.validateWrite = False
                     self.printCurrentProgress( "Error: Failed to validate the data. Please try again." )
                     return None
             
@@ -1227,16 +1278,23 @@ class ImageStore:
             
             self.stats( uploadedImageURL, lengthOfInputData+3, imageMD5 )
             
+            returningCustomURL = False
             if returnCustomImageURL == True and any( value in customImageInputPath for value in self.protocols ):
                 outputList.append( customImageInputPath )
+                returningCustomURL = True
             
             #Return output
             allOutputs += [outputList]
             
-            return allOutputs
+            returnValue = allOutputs
             
         else:
-            return None
+            returnValue = None
+        
+        if mayaEnvironment == True:
+            if self.callbackWrite:
+                self.callbackWrite( returnValue, returningCustomURL )
+        return returnValue
 
 
     def actualRead( self, *args, **kwargs ):
@@ -1276,6 +1334,7 @@ class ImageStore:
         
         #Get image, try from args first then use the main image location value
         #Avoids the default location overriding the args value
+        self.printCurrentProgress( "Reading image...", True, self.readProgress["ReadingImage"] )
         useArgsForImageRead = True
         try:
             if len( args ) > 0 and useArgsForImageRead == True:
@@ -1297,9 +1356,10 @@ class ImageStore:
         outputInfo = checkInputs.checkBooleanKwargs( kwargs, debugData, 'o', 'output', 'outputInfo', 'outputInformation' )
         
         try:
+            self.printCurrentProgress( "Reading files in image...", True, self.readProgress["ReadingFiles"] )
             originalVersionNumber, originalCreationTime, originalCreationName, customImageURL, fileList = ImageStoreZip.read( imageLocation = self.imageName )
             if debugData != False:
-                self.printCurrentProgress( "Files stored in image: {0}".format( ", ".join( fileList ) ) )
+                self.printCurrentProgress( "Files stored in image: {0}".format( ", ".join( fileList ) ), True, self.readProgress["FilesStored"] )
         
         except:
             outputInfo = False
@@ -1307,16 +1367,17 @@ class ImageStore:
             
         if outputInfo == True:
             if originalVersionNumber != None:
-                self.printCurrentProgress( "Version number: {0}".format( originalVersionNumber ) )
+                self.printCurrentProgress( "Version number: {0}".format( originalVersionNumber ), True, self.readProgress["FilesStored"] )
             if originalCreationTime != None:
-                self.printCurrentProgress( "Date created: {0}".format( self.dateFormat( originalCreationTime ) ) )
+                self.printCurrentProgress( "Date created: {0}".format( self.dateFormat( originalCreationTime ) ), True, readProgress["FilesStored"] )
         
+        self.printCurrentProgress( "Storing the pixel data...", True )
         #Store pixel info
         rawData = []
         for pixels in imageInput.getdata():
             for rgb in range( 3 ):
                 rawData.append( pixels[rgb] )
-                
+        
         #Get important image info
         if len( str( rawData[0] ) ) > 1 and rawData[1] == self.firstPixelPadding[0] and rawData[2] == self.firstPixelPadding[1]:
             imageInfo = [int( num ) for num in list( str( rawData[0] ) )]
@@ -1328,7 +1389,8 @@ class ImageStore:
             return None
         
         if debugData != False:
-            self.printCurrentProgress( "Bits per pixel: {0}{1}Cutoff mode: {2}".format( bitsPerPixel, GlobalValues.newLine, cutoffMode ) )
+            self.printCurrentProgress( "Bits per pixel: {0}".format( bitsPerPixel ), True, self.readProgress["FirstPixel"] )
+            self.printCurrentProgress( "Cutoff mode: {0}".format( cutoffMode ), True, self.readProgress["FirstPixel"] )
         
         #Find how the image was made
         if bitsPerPixel == 9 and cutoffMode == 9:
@@ -1344,7 +1406,7 @@ class ImageStore:
             outputText.format( ", attempting to continue." )
             self.printCurrentProgress( outputText )
             useCustomImageMethod = False
-                
+        
         elif bitsPerPixel == 8:
             useCustomImageMethod = False
         else:
@@ -1387,6 +1449,7 @@ class ImageStore:
                         
                 return None
                 
+            self.printCurrentProgress( "Storing the custom image pixel data", True, self.readProgress["FirstPixel"] )
             #Store original pixel info
             originalImageData = []
             for pixels in originalImage.getdata():
@@ -1399,7 +1462,20 @@ class ImageStore:
             
             #Get difference in data
             comparisonData = []
-            for i in range( 3, len( originalImageData ) ):
+            self.printCurrentProgress( "Retrieving data from image...", True, self.readProgress["StoringCustomPixelInfo"] )
+            nextTime = time()+self.outputProgressTime
+            totalPixels = len( originalImageData )
+            minPercent = self.readProgress["StoringCustomPixelInfo"]
+            maxPercent = self.readProgress["ReadingData"]
+            for i in range( 3, totalPixels ):
+                
+                #Output progress
+                if i % self.outputProgressIterations == 0:
+                    if nextTime < time():
+                        nextTime = time()+self.outputProgressTime
+                        percentCompleted = round( 100 * i / totalPixels, 1 )
+                        self.printCurrentProgress( " {0}% completed".format( percentCompleted ), False, int( minPercent+(maxPercent - minPercent)/100.0*percentCompleted ) )
+                        
             
                 if originalImageData[i] in colourIncreaseRange:
                     comparisonData.append( rawData[i] - originalImageData[i] )
@@ -1420,6 +1496,7 @@ class ImageStore:
             numberData = rawData[3:]
         
         #Truncate end of file
+        self.printCurrentProgress( "Removing excess data from end of file...", True, self.readProgress["ReadingData"] )
         try:
         
             for i in range( len( numberData ) ):
@@ -1439,6 +1516,8 @@ class ImageStore:
             self.printCurrentProgress( "Error: File is corrupted." )
         
         try:
+        
+            self.printCurrentProgress( "Decoding data...", True, self.readProgress["TruncatingEnd"] )
             decodedData = self.decodeData( numberData )
             
         except:
@@ -1462,12 +1541,16 @@ class ImageStore:
             decodedData = None
         
         if debugData != False and decodedData != None:
-            self.printCurrentProgress( "Length of stored data: {0}{1}Type of data: {2}".format( len( decodedData ), GlobalValues.newLine, str( type( decodedData ) ).replace( "<type '", "" ).replace( "'>", "" ) ) )
+            self.printCurrentProgress( "Length of stored data: {0}".format( len( decodedData ) ) )
+            self.printCurrentProgress( "Type of data: {0}".format( str( type( decodedData ) ).replace( "<type '", "" ).replace( "'>", "" ) ) )
+            self.printCurrentProgress( "Writing data to user interface...", True )
             if len( str( decodedData ) ) > debugData:
-                print "First {0} characters of data: {1}".format( debugData, str( decodedData )[0:debugData] )
+                self.printCurrentProgress( "First {0} characters of data: {1}".format( debugData, str( decodedData )[0:debugData] ), False )
             else:
-                print "Stored data: {0}".format( decodedData )
+                self.printCurrentProgress( "Stored data: {0}".format( decodedData ), False )
                 
+            self.printCurrentProgress( "Successfully decoded the image.", True, self.readProgress["Decoding"] )
+            
         return decodedData
 
     def decodeData( self, numberData, **kwargs ):
