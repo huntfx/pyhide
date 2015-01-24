@@ -13,7 +13,7 @@ def defaults():
     forceUpload = False
     forceOpenImageOnUpload = False
     forceDisableSaving = False
-    forceCacheWrite = True
+    forceCacheWrite = False
     forceVerify = False
     
     customFilename = "ImageStore.png" #May include a path
@@ -32,8 +32,8 @@ def defaults():
     defaultCacheDirectory = GlobalValues.pythonDirectory
     
     #Displaying a percentage of completion on long calculations
-    outputProgressIterations = 2**16 #Check time after this many calculations
-    outputProgressTime = 5 #Output progress after this many seconds
+    outputProgressIterations = 2**12 #Check time after this many calculations
+    outputProgressTime = 0.25 #Output progress after this many seconds
     
     output = [[defaultImageName, defaultImageDirectory]]
     output.append( [defaultCacheName, defaultCacheDirectory] )
@@ -53,7 +53,7 @@ except:
     raise ImportError( "Python Imaging Library module was not found" )
 from random import randint
 from subprocess import call
-from time import time
+from time import time, sleep
 from datetime import datetime
 import cPickle, base64, urllib2, cStringIO, os, webbrowser, zipfile, getpass, zlib, operator, re, math, md5, itertools
 
@@ -91,6 +91,7 @@ class GlobalValues:
 
 class ImageStore:
     
+    startTime = time()
     defaultValues = defaults()
     defaultImageName = defaultValues[0][0]
     defaultImageDirectory = defaultValues[0][1]
@@ -122,6 +123,24 @@ class ImageStore:
     #Maya
     renderViewSaveLocation = "{0}/RenderViewTemp".format( defaultCacheDirectory )
     renderViewCaption = "Image Store Output"
+    
+    #Percent completed
+    writeProgress = {}
+    writeProgress["CalculatingInputSize"] = 0
+    writeProgress["InputSizeIs"] = 2
+    writeProgress["CheckingImage"] = 2
+    writeProgress["CalculatingCutoffMode"] = 63
+    writeProgress["UsingCutoffMode"] = writeProgress["CalculatingCutoffMode"]
+    writeProgress["CalculatingMaxImageData"] = 83
+    writeProgress["ImageCanStore"] = writeProgress["CalculatingMaxImageData"]
+    writeProgress["InputAtMax"] = 84
+    writeProgress["MinimumBitsPerPixel"] = 85
+    writeProgress["ChooseBitsPerPixel"] = 86
+    writeProgress["SetDimensions"] = 88
+    writeProgress["CalculatingImage"] = 95
+    writeProgress["SavingImage"] = 97
+    writeProgress["WritingExtraInformation"] = 98
+    writeProgress["Validate"] = 100
     
     def __init__( self, *args, **kwargs ):
     
@@ -162,7 +181,39 @@ class ImageStore:
         self.kwargs = kwargs
         self.printProgress = checkInputs.checkBooleanKwargs( kwargs, True, 'p', 'print', 'printProgress', 'printOutput', 'o', 'output', 'outputProgress' )
         self.cleanTemporaryFiles = checkInputs.checkBooleanKwargs( kwargs, True, 'c', 'cleanFiles', 'tempFiles', 'cleanTempFiles', 'temporaryFiles', 'cleanTemporaryFiles' )
-
+        
+        #For updating progress
+        validArgs = checkInputs.validKwargs( kwargs, 'scrollField', 'scrollFieldToUpdate' )
+        self.scrollFieldToUpdate = None
+        for i in range( len( validArgs ) ):
+            try:
+                py.scrollField( kwargs[validArgs[i]], query = True, text = True )
+                self.scrollFieldToUpdate = kwargs[validArgs[i]]
+                break
+            except:
+                pass
+                
+        validArgs = checkInputs.validKwargs( kwargs, 'progressBar', 'progressBarName' )
+        self.progressBar = None
+        for i in range( len( validArgs ) ):
+            try:
+                py.progressBar( kwargs[validArgs[i]], query = True, progress = True )
+                self.progressBar = kwargs[validArgs[i]]
+                break
+            except:
+                pass
+                
+        validArgs = checkInputs.validKwargs( kwargs, 'progressBarText' )
+        self.progressBarText = None
+        for i in range( len( validArgs ) ):
+            try:
+                py.text( kwargs[validArgs[i]], query = True, label = True )
+                self.progressBarText = kwargs[validArgs[i]]
+                break
+            except:
+                pass
+        
+        
     def getImageLocation( self, input ):
         
         if mayaEnvironment == True and input in self.renderViewCheck:
@@ -177,13 +228,34 @@ class ImageStore:
             return imageLocation
         else:
             return None
-        
+    
+    def printCurrentProgress( self, text, display = True, percentComplete = None ):
+        if self.printProgress == True:
+            print text
+            
+        if mayaEnvironment == True and self.scrollFieldToUpdate:
+            try:
+                if percentComplete:
+                    py.progressBar( self.progressBar, edit = True, progress = percentComplete )
+                if display:
+                    py.text( self.progressBarText, edit = True, label = text )
+                    currentText = py.scrollField( self.scrollFieldToUpdate, query = True, text = True )
+                    currentText = "{0}{1}{2}".format( text, GlobalValues.newLine, currentText )
+                    py.scrollField( self.scrollFieldToUpdate, edit = True, text = currentText )
+            except:
+                pass
+    
     def cleanTempFiles( self ):
         if self.cleanTemporaryFiles == True:
             self.renderView( False )
 
     def write( self, *args, **kwargs ):
         
+        if mayaEnvironment == True:
+            try:
+                py.progressBar( self.progressBar, edit = True, progress = 0 )
+            except:
+                pass
         results = self.actualWrite( *args, **kwargs )
         self.cleanTempFiles()
         
@@ -191,8 +263,13 @@ class ImageStore:
 
     def read( self, *args, **kwargs ):
         
+        if mayaEnvironment == True:
+            try:
+                py.progressBar( self.progressBar, edit = True, progress = 0 )
+            except:
+                pass
         results = self.actualRead( *args, **kwargs )
-        self.cleanTempFiles
+        self.cleanTempFiles()
         
         return results
         
@@ -366,17 +443,15 @@ class ImageStore:
                 if customImageInput == None and self.forceCustomImages == False:
                     outputText = outputText.replace( ".", ", using URL as a custom image." )
                     customImageInput = self.readImage( self.imageName )
-                    
-                if self.printProgress == True:
-                    print outputText
+                
+                self.printCurrentProgress( outputText )
                     
                 self.imageName = self.defaultImageName
                 usedFilenameAsCustom = True
                 
             
             if ( len( validArgs ) > 0 or usedFilenameAsCustom == True ) and customImageInput == None:
-                if self.printProgress == True:
-                    print "Error: Custom image could not be read. Output image will be saved without it."
+                self.printCurrentProgress( "Error: Custom image could not be read. Output image will be saved without it." )
             
             if customImageInput == None:
                 useCustomImageMethod = False
@@ -567,27 +642,23 @@ class ImageStore:
                         
                         if not any( value in customImageInputPath for value in originalImageProtocols ):
                             
-                            if self.printProgress == True:
-                                print "Uploading original image..."
+                            self.printCurrentProgress( "Uploading original image..." )
                             
                             uploadedImageURL = self.uploadImage( customImageInputPath, ignoreSize = True )
                             
                             if uploadedImageURL != None:
-                                if self.printProgress == True:
-                                    print "Link to original image is {0}.".format( uploadedImageURL )
+                                self.printCurrentProgress( "Link to original image is {0}.".format( uploadedImageURL ) )
                                 self.stats( uploadedImageURL, False, imageMD5 )
                                     
                                 if writeToINI == False:
                                 
-                                    if self.printProgress == True:
-                                        print "Set this link as the custom image input to avoid re-uploading the same image each time."
+                                    self.printCurrentProgress( "Set this link as the custom image input to avoid re-uploading the same image each time." )
                                 
                                 customImageInputPath = str( uploadedImageURL )
                                 customImageInput = self.readImage( uploadedImageURL )
                                                                 
                             else:
-                                if self.printProgress == True:
-                                    print "Original image URL will not be stored within the image."
+                                self.printCurrentProgress( "Original image URL will not be stored within the image." )
                                 
                     elif customImageInput == None:
                         customImageInputPath = ""
@@ -607,25 +678,24 @@ class ImageStore:
         
         if ( customImageExtension in formatList.keys() ) and customImageExtension not in ignoreFormats:
             
-            if self.printProgress == True:
-                try:
-                    if mayaEnvironment == True:
-                        imageType = renderViewFormat[py.getAttr( "defaultRenderGlobals.imageFormat" )][1]
-                    else:
-                        imageType = formatList[customImageExtension]
-                except:
-                    imageType = customImageExtension.upper()
-                                    
-                if customImageExtension not in ignoreFormats:
+            try:
+                if mayaEnvironment == True:
+                    imageType = renderViewFormat[py.getAttr( "defaultRenderGlobals.imageFormat" )][1]
+                else:
+                    imageType = formatList[customImageExtension]
+            except:
+                imageType = customImageExtension.upper()
+                                
+            if customImageExtension not in ignoreFormats:
+            
+                #Fix for V-Ray
+                if py.getAttr( "defaultRenderGlobals.imageFormat" ) == 52:
+                    imageType = "V-Ray " + imageType
                 
-                    #Fix for V-Ray
-                    if py.getAttr( "defaultRenderGlobals.imageFormat" ) == 52:
-                        imageType = "V-Ray " + imageType
-                        
-                    print "Reason: {0} files not supported.".format( imageType )
-                
-                if mayaEnvironment == True and usedRenderView == True:
-                    print "Use 'ImageStore().renderView( <format> )' to change the render image format."
+                self.printCurrentProgress( "Reason: {0} files not supported.".format( imageType ) )
+            
+            if mayaEnvironment == True and usedRenderView == True:
+                self.printCurrentProgress( "Use 'ImageStore().renderView( <format> )' to change the render image format." )
             
             customImageInput = None
             customImageInputPath = ""
@@ -633,17 +703,18 @@ class ImageStore:
         
         #Print how large the input data is
         if not input and returnCustomImageInfo == False:
-            if self.printProgress == True:
-                print "Error: Input data is required"
+            self.printCurrentProgress( "Error: Input data is required" )
             return None
         
         elif returnCustomImageInfo == False:
+        
+            if returnCustomImageInfo == False:
+                self.printCurrentProgress( "Encoding input data...", True, self.writeProgress["CalculatingInputSize"] )
             inputData = self.encodeData( input, binary = useCustomImageMethod )
             lengthOfInputData = len( inputData )
             
             if returnCustomImageInfo == False:
-                if self.printProgress == True:
-                    print "Input data is {0} bytes ({1}kb)". format( lengthOfInputData+3, ( lengthOfInputData+3 )/1024 )
+                self.printCurrentProgress( "Input data is {0} bytes ({1}kb)". format( lengthOfInputData+3, ( lengthOfInputData+3 )/1024 ), True, self.writeProgress["InputSizeIs"] )
             
             #Return the normal size of input data
             if outputSize == True:
@@ -658,8 +729,7 @@ class ImageStore:
         if useCustomImageMethod == True:
             
             if returnCustomImageInfo == False:
-                if self.printProgress == True:
-                    print "Checking image has enough pixels to store the input data. This may take a while."
+                self.printCurrentProgress( "Checking image has enough pixels to store the input data. This may take a while.", True, self.writeProgress["CheckingImage"] )
             
             bitsPerPixel = 6
             
@@ -691,9 +761,8 @@ class ImageStore:
             if successfulRead == False or len( validPixels[storedCutoffMode] ) == 0 or bestCutoffMode == None:
 
                 #Calculate max data that can be stored
-                if self.printProgress == True:
-                    if storedCutoffMode == invalidCutoffMode:
-                        print "Calculating the best method to store data..."
+                if storedCutoffMode == invalidCutoffMode:
+                    self.printCurrentProgress( "Calculating the best method to store data...", True, self.writeProgress["CheckingImage"] )
                         
                 totalPixelCount = 0
                 imageDimensions = customImageInput.size
@@ -701,14 +770,16 @@ class ImageStore:
                 pixelCount = 0
                 
                 nextTime = time()+self.outputProgressTime
+                minPercent = self.writeProgress["CheckingImage"]
+                maxPercent = self.writeProgress["CalculatingCutoffMode"]
                 for pixels in customImageInput.getdata():
                     
                     #Output progress
                     if pixelCount % self.outputProgressIterations == 0:
                         if nextTime < time():
                             nextTime = time()+self.outputProgressTime
-                            if self.printProgress == True:
-                                print " {0}% completed".format( round( 100 * totalPixelCount / imageSize, 1 ) )
+                            percentCompleted = round( 100 * totalPixelCount / imageSize, 1 )
+                            self.printCurrentProgress( " {0}% completed".format( percentCompleted ), False, int( minPercent+( maxPercent - minPercent )/100.0*percentCompleted ) )
                 
                         for rgb in range( 3 ):
                             rawData.append( pixels[rgb] )
@@ -728,10 +799,8 @@ class ImageStore:
                 else:
                     cutoffMode = storedCutoffMode
                       
-                
-                if self.printProgress == True:
-                    print "Using storing mode {0}.".format( cutoffMode )
-                    print "Calculating how much data can be stored for different amounts of bits using this mode..."
+                self.printCurrentProgress( "Using storing mode {0}.".format( cutoffMode ), True, self.writeProgress["UsingCutoffMode"] )
+                self.printCurrentProgress( "Calculating how much data can be stored for different amounts of bits using this mode...", True, self.writeProgress["UsingCutoffMode"] )
                 
                 #Find maximum size image can store for bits per colour
                 nextTime = time()+self.outputProgressTime
@@ -739,6 +808,9 @@ class ImageStore:
                 pixelCount = 0
                 totalCount = float( 8*len( rawData ) )
                 bitsPerPixel = 0
+                
+                minPercent = self.writeProgress["UsingCutoffMode"]
+                maxPercent = self.writeProgress["CalculatingMaxImageData"]
                 for i in range( 8 ):
                                             
                     bitsPerPixel = i+1
@@ -755,13 +827,12 @@ class ImageStore:
                         if pixelCount % self.outputProgressIterations == 0:
                             if nextTime < time():
                                 nextTime = time()+self.outputProgressTime
-                                if self.printProgress == True:
-                                    print " {0}% completed".format( round( 100 * pixelCount / totalCount, 1 ) )
+                                percentCompleted = round( 100 * pixelCount / totalCount, 1 )
+                                self.printCurrentProgress( " {0}% completed".format( percentCompleted ), False, int( minPercent+(maxPercent - minPercent)/100.0*percentCompleted ) )
                         
             else:
             
-                if self.printProgress == True:
-                    print "File information read from cache."
+                self.printCurrentProgress( "File information read from cache.", True, self.writeProgress["CalculatingMaxImageData"] )
                     
                 #Store custom image information
                 for pixels in customImageInput.getdata():
@@ -774,8 +845,7 @@ class ImageStore:
                     cutoffMode = customCutoffMode
                 validPixels = storedValidPixels
                 
-                if self.printProgress == True:
-                    print "Using storing mode {0}.".format( cutoffMode )
+                self.printCurrentProgress( "Using storing mode {0}.".format( cutoffMode ), True, self.writeProgress["ImageCanStore"] )
             
             validPixelsTotal = [number*bits for number, bits in validPixels[cutoffMode].iteritems()]
             bitsPerPixelMax = validPixelsTotal.index( max( validPixelsTotal ) )+1
@@ -788,8 +858,7 @@ class ImageStore:
             
             #Get maximum bytes per bits
             imageBytes = validPixels[cutoffMode][ bitsPerPixelMax ]
-            if self.printProgress == True:
-                print "Image can store up to around {0} bytes ({1}kb)".format( imageBytes, imageBytes/1024 )
+            self.printCurrentProgress( "Image can store up to around {0} bytes ({1}kb)".format( imageBytes, imageBytes/1024 ), True, self.writeProgress["ImageCanStore"] )
             
             if returnCustomImageInfo == False:
                 inputBytes = ( len( inputData )*8 )/bitsPerPixelMax+3
@@ -802,8 +871,7 @@ class ImageStore:
                 else:
                     outputText += ", now attempting to find the minumum valid value to store the data."
                 
-                if self.printProgress == True:
-                    print outputText
+                self.printCurrentProgress( outputText, True, self.writeProgress["InputAtMax"] )
             
             #Stop here if image information is wanted
             if returnCustomImageInfo == True:
@@ -814,7 +882,8 @@ class ImageStore:
             bitsPerPixel = 1
             bytesNeeded = ( lengthOfInputData*8 )/bitsPerPixel+3 #Avoids having to actually split the input data
             
-                
+            minPercent = self.writeProgress["InputAtMax"]
+            maxPercent = self.writeProgress["MinimumBitsPerPixel"]
             while validPixels[cutoffMode][bitsPerPixel] < bytesNeeded:
             
                 if bitsPerPixel > 7:
@@ -823,13 +892,11 @@ class ImageStore:
                         
                     #Stop code here if reverting to default isn't an option
                     if revertToDefault == False:
-                        if self.printProgress == True:
-                            print outputText
+                        self.printCurrentProgress( outputText, True, maxPercent )
                         return None
                     else:
                         outputText += " Disabling the custom image option."
-                        if self.printProgress == True:
-                            print outputText
+                        self.printCurrentProgress( outputText, True, int( minPercent+(maxPercent-minPercent)/100.0*(bitsPerPixel+1)/8.0  ) )
                     
                     useCustomImageMethod = False
                     inputData = self.encodeData( input, binary = useCustomImageMethod )
@@ -842,13 +909,13 @@ class ImageStore:
             
             #Continue if valid, if not pass through
             if bitsPerPixel < 8:
-                if self.printProgress == True:
-                    if bitsPerPixel > 1:
-                        print "Increased to {0} bits of colour to fit data within the image.".format( bitsPerPixel )
-                    else:
-                        print "Using 1 bit of colour to fit data within the image."
+                if bitsPerPixel > 1:
+                    self.printCurrentProgress( "Increased to {0} bits of colour to fit data within the image.".format( bitsPerPixel ), True, self.writeProgress["ChooseBitsPerPixel"] )
+                else:
+                    self.printCurrentProgress( "Using 1 bit of colour to fit data within the image.", True, self.writeProgress["ChooseBitsPerPixel"] )
     
                 #Encode input data
+                self.printCurrentProgress( "Splitting input data into separate pixel values...", True, self.writeProgress["ChooseBitsPerPixel"] )
                 joinedData = "".join( inputData )
                 splitData = re.findall( r".{1," + str( bitsPerPixel ) + "}", joinedData, re.DOTALL )
                 colourIncreaseRange, colourReduceRange = self.validRange( cutoffMode, bitsPerPixel )
@@ -887,8 +954,7 @@ class ImageStore:
             bitsPerPixel = 8
             cutoffMode = 9
     
-            if self.printProgress == True:
-                print "Set width to {0} pixels and height to {1} pixels.".format( width, height )
+            self.printCurrentProgress( "Set width to {0} pixels and height to {1} pixels.".format( width, height ), True, self.writeProgress["SetDimensions"] )
         
         #Draw image
         imageOutput = Image.new("RGB", ( width, height ) )
@@ -915,11 +981,23 @@ class ImageStore:
             minImageAddition = 255
         
         #Assign pixel colours
+        self.printCurrentProgress( "Calculating image...", True, self.writeProgress["SetDimensions"] )
+        nextTime = time()+self.outputProgressTime
+        minPercent = self.writeProgress["SetDimensions"]
+        maxPercent = self.writeProgress["CalculatingImage"]
         for y in range( height ):
             for x in range( width ):
                 
                 isDataFromInput = True
                 currentProgress = 3*( y*width+x )
+                
+                #Output progress
+                if y*width+x % self.outputProgressIterations == 0:
+                    if nextTime < time():
+                        nextTime = time()+self.outputProgressTime
+                        percentCompleted = round( 100*( currentProgress/3 )/( width*height ), 1 )
+                        self.printCurrentProgress( " {0}% completed".format( percentCompleted ), True, int( minPercent+(maxPercent - minPercent)/100.0*percentCompleted ) )
+
                 
                 #Assign information to first pixel
                 if x == 0 and y == 0:
@@ -999,6 +1077,8 @@ class ImageStore:
                     
                 imageData[x,y] = tuple( dataRGB )
         
+        self.printCurrentProgress( "Saving image...", True, self.writeProgress["SavingImage"] )
+        
         try:
             imageOutput.save( self.imageName, "PNG" )
             
@@ -1007,8 +1087,7 @@ class ImageStore:
             failText = ["Error: Failed saving file to {0}.".format( self.imageName )]
             failText.append( "You may have incorrect permissions or the file may be in use." )
             failText.append( "{0}Attempting to save in new location...".format( GlobalValues.newLine ) )
-            if self.printProgress == True:
-                print " ".join( failText )
+            self.printCurrentProgress( " ".join( failText ) )
             savingFailed = "{0}Failed to save file.".format( GlobalValues.newLine )
             
             #If already in default directory
@@ -1028,7 +1107,7 @@ class ImageStore:
                     except:
                         self.imageName = None
                         failText = savingFailed
-                        
+            
             #If not in default directory
             else:
             
@@ -1060,14 +1139,12 @@ class ImageStore:
                 pass
             imageMD5 = imageHash.hexdigest()
             
-            if self.printProgress == True:
-                print "Saved image."
+            self.printCurrentProgress( "Saved image.", True, self.writeProgress["WritingExtraInformation"] )
             
             outputList = [( self.imageName ).replace( "\\", "/" )]
             
             #Zip extra information inside image
-            if self.printProgress == True:
-                print "Writing extra information into image file."
+            self.printCurrentProgress( "Writing extra information into image file.", True, self.writeProgress["WritingExtraInformation"] )
                 
             infoText = ["Date created: {0}{1}".format( self.dateFormat( time() ), GlobalValues.newLine )]
             try:
@@ -1088,25 +1165,24 @@ class ImageStore:
             zipSuccess = ImageStoreZip.combine( image = self.imageName )
             
             if zipSuccess == False:
-                if self.printProgress == True:
-                    print "Error: Unable to write extra information."
+                self.printCurrentProgress( "Error: Unable to write extra information." )
             
             #Upload image
             uploadedImageURL = None
             if upload == True and overrideUpload != True:
-                if self.printProgress == True:
-                    print "Uploading image..."
+                self.printCurrentProgress( "Uploading image..." )
                     
                 uploadedImageURL = self.uploadImage( self.imageName, openImage )
                 if uploadedImageURL != None:
                     outputList.append( str( uploadedImageURL ) )
                     
-            if self.printProgress == True:
-                print "Done."
+            self.printCurrentProgress( "Done.", False, self.writeProgress["Validate"] )
             
             
             #Check the output
             if validateOutput == True:
+                
+                self.printCurrentProgress( "Validating saved image...", True, self.writeProgress["Validate"] )
             
                 #Stop reading printing anything
                 tempDisablePrint = False
@@ -1122,14 +1198,12 @@ class ImageStore:
                     else:
                     
                         self.printProgress = tempDisablePrint
-                        if self.printProgress == True:
-                            print "Successfully validated the data."
+                        self.printCurrentProgress( "Successfully validated the data.", True, self.writeProgress["Validate"] )
                         
                 except:
                 
                     self.printProgress = tempDisablePrint
-                    if self.printProgress == True:
-                        print "Error: Failed to validate the data. Please try again."
+                    self.printCurrentProgress( "Error: Failed to validate the data. Please try again." )
                     return None
             
             
@@ -1139,7 +1213,7 @@ class ImageStore:
                     try:
                         py.renderWindowEditor( 'renderView', edit = True, loadImage = self.imageName )
                     except:
-                        print "Error: Failed to write image into the renderView window."
+                        self.printCurrentProgress( "Error: Failed to write image into the renderView window." )
             
             #Remove the image
             if deleteImage == True:
@@ -1216,8 +1290,7 @@ class ImageStore:
             imageInput = self.readImage( self.imageName )
             
         if imageInput == None:
-            if self.printProgress == True:
-                print "Error: Unable to read image."
+            self.printCurrentProgress( "Error: Unable to read image." )
             return None
             
         #Output stored zip information
@@ -1225,8 +1298,8 @@ class ImageStore:
         
         try:
             originalVersionNumber, originalCreationTime, originalCreationName, customImageURL, fileList = ImageStoreZip.read( imageLocation = self.imageName )
-            if debugData != False and self.printProgress == True:
-                print "Files stored in image: {0}".format( ", ".join( fileList ) )
+            if debugData != False:
+                self.printCurrentProgress( "Files stored in image: {0}".format( ", ".join( fileList ) ) )
         
         except:
             outputInfo = False
@@ -1234,9 +1307,9 @@ class ImageStore:
             
         if outputInfo == True:
             if originalVersionNumber != None:
-                print "Version number: {0}".format( originalVersionNumber )
+                self.printCurrentProgress( "Version number: {0}".format( originalVersionNumber ) )
             if originalCreationTime != None:
-                print "Date created: {0}".format( self.dateFormat( originalCreationTime ) )
+                self.printCurrentProgress( "Date created: {0}".format( self.dateFormat( originalCreationTime ) ) )
         
         #Store pixel info
         rawData = []
@@ -1251,26 +1324,25 @@ class ImageStore:
             cutoffMode = imageInfo[1]
             
         else:
-            print "Error: Invalid image."
+            self.printCurrentProgress( "Error: Invalid image." )
             return None
         
-        if debugData != False and self.printProgress == True:
-            print "Bits per pixel: {0}{1}Cutoff mode: {2}".format( bitsPerPixel, GlobalValues.newLine, cutoffMode )
+        if debugData != False:
+            self.printCurrentProgress( "Bits per pixel: {0}{1}Cutoff mode: {2}".format( bitsPerPixel, GlobalValues.newLine, cutoffMode ) )
         
         #Find how the image was made
         if bitsPerPixel == 9 and cutoffMode == 9:
-            if self.printProgress == True:
-                print "Error: Image had debug data set to true. Unable to read."
+            self.printCurrentProgress( "Error: Image had debug data set to true. Unable to read." )
             return None
             
         elif len( imageInfo ) > 2:
-            if self.printProgress == True:
-                outputText = "Stored data {0}."
-                if str( originalVersionNumber ) != str( self.versionNumber ):
-                    outputText.format( "is from an older version {0}" )
-                else:
-                    outputText.format( "appears to be invalid {0} anyway" )
-                outputText.format( ", attempting to continue" )
+            outputText = "Stored data {0}."
+            if str( originalVersionNumber ) != str( self.versionNumber ):
+                outputText.format( "is from an older version {0}" )
+            else:
+                outputText.format( "appears to be invalid {0} anyway" )
+            outputText.format( ", attempting to continue." )
+            self.printCurrentProgress( outputText )
             useCustomImageMethod = False
                 
         elif bitsPerPixel == 8:
@@ -1293,11 +1365,10 @@ class ImageStore:
                         
             if len( validArgs ) > 0 and originalImage == None:
             
-                if self.printProgress == True:
-                    outputText = "Error: Could not read the custom input image."
-                    if len( customImageURL ) > 0:
-                        outputText.replace( ".", ", reverting to the stored URL." )
-                    print outputText
+                outputText = "Error: Could not read the custom input image."
+                if len( customImageURL ) > 0:
+                    outputText.replace( ".", ", reverting to the stored URL." )
+                self.printCurrentProgress( outputText )
                     
                 originalImage = self.readImage( customImageURL )
                 
@@ -1309,11 +1380,10 @@ class ImageStore:
             
             #If both attempts haven't worked
             if originalImage == None:
-                if self.printProgress == True:
-                    if len( customImageURL ) > 0:
-                        print "Error: Invalid custom image."
-                    else:
-                        print "Error: Something has gone wrong."
+                if len( customImageURL ) > 0:
+                    self.printCurrentProgress( "Error: Invalid custom image." )
+                else:
+                    self.printCurrentProgress( "Error: Something has gone wrong." )
                         
                 return None
                 
@@ -1366,35 +1436,33 @@ class ImageStore:
                     break
                     
         except:
-            if self.printProgress == True:
-                print "Error: File is corrupted."
+            self.printCurrentProgress( "Error: File is corrupted." )
         
         try:
             decodedData = self.decodeData( numberData )
             
         except:
-            if self.printProgress == True:
-            
-                if usedDifferentOriginalImage == True:
-                    print "Failed to decode data, the custom original image specified may not be the original one used."
-                    
-                    if len( customImageURL ) > 0:
-                        print "Failed to decode data, however here is a URL to the correct image contained within the file."
-                        print "If you are using the original image stored on your computer, it may have resized after being uploaded to Imgur."
-                    
-                    else:
-                        print "No URL was found stored in the image, you may have linked to the wrong image."
+        
+            if usedDifferentOriginalImage == True:
+                self.printCurrentProgress( "Failed to decode data, the custom original image specified may not be the original one used." )
                 
-                elif len( customImageURL ) > 0:
-                    print "Failed to decode data from the stored URL ({0}), check the image still exists.".format( customImageURL )
+                if len( customImageURL ) > 0:
+                    self.printCurrentProgress( "Failed to decode data, however here is a URL to the correct image contained within the file." )
+                    self.printCurrentProgress( "If you are using the original image stored on your computer, it may have resized after being uploaded to Imgur." )
                 
                 else:
-                    print "Failed to decode data from the image."
+                    self.printCurrentProgress( "No URL was found stored in the image, you may have linked to the wrong image." )
+            
+            elif len( customImageURL ) > 0:
+                self.printCurrentProgress( "Failed to decode data from the stored URL ({0}), check the image still exists.".format( customImageURL ) )
+            
+            else:
+                self.printCurrentProgress( "Failed to decode data from the image." )
                     
             decodedData = None
         
-        if debugData != False and self.printProgress == True:
-            print "Length of stored data: {0}{1}Type of data: {2}".format( len( decodedData ), GlobalValues.newLine, str( type( decodedData ) ).replace( "<type '", "" ).replace( "'>", "" ) )
+        if debugData != False and decodedData != None:
+            self.printCurrentProgress( "Length of stored data: {0}{1}Type of data: {2}".format( len( decodedData ), GlobalValues.newLine, str( type( decodedData ) ).replace( "<type '", "" ).replace( "'>", "" ) ) )
             if len( str( decodedData ) ) > debugData:
                 print "First {0} characters of data: {1}".format( debugData, str( decodedData )[0:debugData] )
             else:
@@ -1477,13 +1545,13 @@ class ImageStore:
                 return None
             
             if fileExtension not in validFormats.keys():
-                if self.printProgress == True:
                     
-                    if fileExtension in allFormats.keys():
-                        fileExtension = allFormats[fileExtension]
-                    else:
-                        fileExtension = fileExtension.upper()
-                    print "Error: {0} files not supported by Imgur.".format( fileExtension )
+                if fileExtension in allFormats.keys():
+                    fileExtension = allFormats[fileExtension]
+                else:
+                    fileExtension = fileExtension.upper()
+                self.printCurrentProgress( "Error: {0} files not supported by Imgur.".format( fileExtension ) )
+                
                 return None
         
             #Save if from a URL
@@ -1506,16 +1574,14 @@ class ImageStore:
                 uploadedImage = pyimgur.Imgur( "0d10882abf66dec" ).upload_image( imageLocation, title=imageTitle )
             
             except:
-                if self.printProgress == True:
-                    print "Error: Failed uploading image, trying once more."
+                self.printCurrentProgress( "Error: Failed uploading image, trying once more." )
                     
                 #Once it didn't upload the first time, no idea why, but I guess this just makes sure your internet didn't temporarily cut out
                 try:
                     uploadedImage = pyimgur.Imgur( "0d10882abf66dec" ).upload_image( imageLocation, title=imageTitle )
                 
                 except:
-                    if self.printProgress == True:
-                        print "Failed to upload image."
+                    self.printCurrentProgress( "Failed to upload image." )
                     return None
             
             #Find out image size
@@ -1525,8 +1591,7 @@ class ImageStore:
             #Check it's not been converted, not needed if it's acting as the original image
             if originalImageSize != uploadedImageSize and ignoreSize == False:
             
-                if self.printProgress == True:
-                    print "Error: File is too large for imgur."
+                self.printCurrentProgress( "Error: File is too large for Imgur." )
                 return None
                 
             else:
@@ -1971,8 +2036,7 @@ class ImageStore:
                 else:
                     raise RangeError( "value must be between 0 and 63" )
             except:
-                if self.printProgress == True:
-                    print "Error: Index must be between 0 and 63."
+                self.printCurrentProgress( "Error: Index must be between 0 and 63." )
         
         elif valueType == str:
             
@@ -1982,7 +2046,7 @@ class ImageStore:
                     py.setAttr( "defaultRenderGlobals.imageFormat", formatList[save.lower()] )
                     py.setAttr( "defaultRenderGlobals.imfkey", save.lower() )
                 except:
-                    print "Error: Can't update scene settings."
+                    self.printCurrentProgress( "Error: Can't update scene settings." )
             
             
 
