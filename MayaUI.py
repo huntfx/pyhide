@@ -20,6 +20,7 @@ class UserInterface:
     floatSliderGrpList = {}
     scrollFieldList = {}
     frameLayoutList = {}
+    progressBarList = {}
     
     @classmethod
     def display( self ):
@@ -152,13 +153,13 @@ class UserInterface:
                         with py.rowColumnLayout( numberOfColumns = 1, width = self.windowWidth/100*49 ):
                             py.radioCollection()
                             with py.rowColumnLayout( numberOfColumns = 3 ):
-                                self.radioButtonList["ReturnAll"] = py.radioButton( label = "Return all data", select = True )
+                                self.radioButtonList["ReturnAll"] = py.radioButton( label = "Return all data" )
                                 py.textField( width = self.windowWidth/100*10, visible = False )
                                 py.text( label = "" )
                             with py.rowColumnLayout( numberOfColumns = 3 ):
                                 returnSomeDataCommand = py.Callback( self.returnSomeData )
-                                self.radioButtonList["ReturnSome"] = py.radioButton( label = "Return " )
-                                self.textFieldList["ReturnSome"] = py.textField( text = 100, width = self.windowWidth/100*10, receiveFocusCommand = returnSomeDataCommand, changeCommand = returnSomeDataCommand, enterCommand = returnSomeDataCommand )
+                                self.radioButtonList["ReturnSome"] = py.radioButton( label = "Return ", select = True )
+                                self.textFieldList["ReturnSome"] = py.textField( text = 100000, width = self.windowWidth/100*10, receiveFocusCommand = returnSomeDataCommand, changeCommand = returnSomeDataCommand, enterCommand = returnSomeDataCommand )
                                 py.text( label = " characters of data" )
                         py.text( label = "", width = self.windowWidth/100*1 )
                         with py.rowColumnLayout( numberOfColumns = 1, width = self.windowWidth/100*49 ):
@@ -170,7 +171,7 @@ class UserInterface:
                                 
                     with py.rowColumnLayout( numberOfColumns = 3, width = self.windowWidth/100*99.5 ):
                         py.text( label = "", width = self.windowWidth/100*1 )
-                        py.checkBox( label = "Use custom image path instead of stored URL (enable if custom image URL was not saved to the image)" )
+                        self.checkBoxList["UseCustomURL"] = py.checkBox( label = "Use custom image path instead of stored URL (enable if custom image URL was not saved to the image)" )
                         py.text( label = "", width = self.windowWidth/100*1 )
         
             with py.columnLayout( "Advanced" ):
@@ -307,18 +308,29 @@ class UserInterface:
             py.text( label="", width = self.windowWidth/100*1 )
             py.button( label = "Write Image", width = self.windowWidth/100*49, command = py.Callback( self.writeImage ) )
             py.text( label = "", width = self.windowWidth/100*1 )
-            py.button( label = "Read Image", width = self.windowWidth/100*49 )
-            py.text( label = "", width = self.windowWidth/100*1 )      
+            py.button( label = "Read Image", width = self.windowWidth/100*49, command = py.Callback( self.readImage ) )
+            py.text( label = "", width = self.windowWidth/100*1 ) 
+                
+        with py.rowColumnLayout( numberOfColumns = 3 ):
+            py.text( label="", width = self.windowWidth/100*1 )
+            self.textList["ProgressBar"] = py.text( label = "Waiting for input...", width = self.windowWidth/100*98.5 )
+            py.text( label="", width = self.windowWidth/100*1 )
+            py.text( label = "" )
+            self.progressBarList["ProgressBar"] = py.progressBar( progress = 0 )
+            py.text( label = "" ) 
             
             
         with py.rowColumnLayout( numberOfColumns = 1 ):
+            with py.frameLayout( label = "Progress", collapsable = True, collapse = True, visible = True, width = self.windowWidth/100*101 ) as self.frameLayoutList["OutputProgress"]:
+                self.scrollFieldList["OutputProgress"] = py.scrollField( height = 160, editable = False ) 
+                
             with py.frameLayout( label = "Write Output", collapsable = True, collapse = True, visible = True, width = self.windowWidth/100*101 ) as self.frameLayoutList["OutputWrite"]:
                 
                 with py.rowColumnLayout( numberOfColumns = 5 ):
                     py.text( label="", width = self.windowWidth/100*1 )
                     
                     with py.rowColumnLayout( numberOfColumns = 1, width = self.windowWidth/100*48 ):
-                        py.text( label="   Path:", align = "left", width = self.windowWidth/100*45.2 )
+                        py.text( label="   Path(s):", align = "left", width = self.windowWidth/100*45.2 )
                         self.scrollFieldList["OutputPath"] = py.scrollField( height = 65, editable = False )
                 
                 
@@ -332,18 +344,54 @@ class UserInterface:
                         
                     py.text( label="", width = self.windowWidth/100*1 )
                     
-            with py.frameLayout( label = "Read Output", collapsable = True, collapse = True, visible = True, width = self.windowWidth/100*101, ann = "Test" ):
-                py.scrollField( height = 260, editable = False, wordWrap = True, text = str( range( 1000 ) ) ) 
+            with py.frameLayout( label = "Read Output", collapsable = True, collapse = True, visible = True, width = self.windowWidth/100*101 ) as self.frameLayoutList["OutputRead"]:
+                self.scrollFieldList["OutputRead"] = py.scrollField( height = 260, editable = False, wordWrap = True ) 
             
         self.setFinalValues()
         py.showWindow()
+    
+    @classmethod
+    def readImage( self ):
+        
+        kwargs = {}
+        imagePath = py.textField( self.textFieldList["MainImagePath"], query = True, text = True )
+        customImagePath = py.textField( self.textFieldList["CustomImagePath"], query = True, text = True )
+        disableCustomImage = not py.checkBox( self.checkBoxList["UseCustomURL"], query = True, value = True )
+        
+        if customImagePath and not disableCustomImage:
+            #Make sure custom image is valid
+            if py.text( self.textList["ValidateCustomImage"], query = True, label = True ) != "1":
+                py.button( self.buttonList["ValidateCustomImage"], query = True, command = True )()
+            if py.text( self.textList["ValidateCustomImage"], query = True, label = True ) == "1":
+                kwargs["CustomImagePath"] = customImagePath
+        
+        returnSomeData = None
+        returnAllData = py.radioButton( self.radioButtonList["ReturnAll"], query = True, select = True )
+        if returnAllData == False:
+            returnSomeData = py.textField( self.textFieldList["ReturnSome"], query = True, text = True ).replace( ",", "" ).replace( " ", "" )
+            if not returnSomeData.isdigit():
+                returnSomeData = 100000
+            else:
+                returnSomeData = int( returnSomeData )
+        
+        outputData = None
+        if py.text( self.textList["ValidateMainImage"], query = True, label = True ) != "1":
+            py.button( self.buttonList["ValidateMainImage"], query = True, command = True )()
+        if py.checkBox( self.checkBoxList["ImagePathExists"], query = True, value = True ):
+            outputData = ImageStore( imagePath ).read( **kwargs )
+        
+        if not outputData:
+            outputData = "Unable to read image"
+            returnSomeData = len( outputData )
+            
+        py.scrollField( self.scrollFieldList["OutputRead"], edit = True, text = str( outputData )[0:returnSomeData] )
+        py.frameLayout( self.frameLayoutList["OutputRead"], edit = True, collapse = False )
     
     @classmethod
     def writeImage( self ):
         
         kwargs = {}
         imagePath = py.textField( self.textFieldList["MainImagePath"], query = True, text = True )
-        
         customImagePath = py.textField( self.textFieldList["CustomImagePath"], query = True, text = True )
         disableCustomImage = py.checkBox( self.checkBoxList["DisableCustomImage"], query = True, value = True )
         
@@ -353,8 +401,7 @@ class UserInterface:
         if py.text( self.textList["ValidateCustomImage"], query = True, label = True ) == "1":
             kwargs["CustomImagePath"] = customImagePath
         
-        inputData = self.validateInput( None, True )
-        kwargs["Input"] = "test"
+        kwargs["Input"] = self.validateInput( None, True )
         
         kwargs["Upload"] = py.checkBox( self.checkBoxList["UploadMainImage"], query = True, value = True )
         kwargs["OpenUploadedImage"] = py.checkBox( self.checkBoxList["OpenMainImage"], query = True, value = True )
@@ -363,24 +410,24 @@ class UserInterface:
         kwargs["SizeRatio"] = py.floatSliderGrp( self.floatSliderGrpList["Ratio"], query = True, value = True )
         
         kwargs["ValidateOutput"] = py.checkBox( self.checkBoxList["Validate"], query = True, value = True )
-        kwargs["Revert"] = py.checkBox( self.checkBoxList["Revert"], query = True, value = True ) 
+        kwargs["Revert"] = not py.checkBox( self.checkBoxList["Revert"], query = True, value = True ) 
         kwargs["DisableInformation"] = not py.checkBox( self.checkBoxList["SaveInformation"], query = True, value = True )
         
         cutoffModes = py.textField( self.textFieldList["CutoffModes"], query = True, text = True )
         if cutoffModes:
-            kwargs["cutoffModes"] = tuple( cutoffModes )
+            kwargs["CutoffModes"] = tuple( cutoffModes )
         
         cutoffPrefix = py.textField( self.textFieldList["MultipleImagesPrefix"], query = True, text = True )
         if cutoffPrefix:
-            kwargs["cutoffModePrefix"] = cutoffPrefix
+            kwargs["CutoffModePrefix"] = cutoffPrefix
             
         kwargs["WriteToCache"] = py.checkBox( self.checkBoxList["WriteCache"], query = True, value = True )
         
         kwargs["returnCustomImageURL"] = py.checkBox( self.checkBoxList["ReturnCustomURL"], query = True, value = True )
         kwargs["debugOutput"] = py.checkBox( self.checkBoxList["DebugData"], query = True, value = True )
         
-        outputLocations = ImageStore( imagePath ).write( **kwargs )
-        print outputLocations
+        outputLocations = ImageStore( imagePath, scrollField = self.scrollFieldList["OutputProgress"], progressBarName = self.progressBarList["ProgressBar"], progressBarText = self.textList["ProgressBar"] ).write( **kwargs )
+        
         imagePaths = []
         imageURLs = []
         customURL = []
@@ -605,6 +652,9 @@ class UserInterface:
             radioButtonList["file"] = py.radioButton( self.radioButtonList["InputIsFile"], query = True, select = True )
             inputType = [key for key, value in radioButtonList.iteritems() if value == True][0]
         
+        if not inputType:
+            input = str( input )
+        
         #Check if it can be executed as code
         if inputType == "code":
             if not returnOnly:
@@ -816,6 +866,10 @@ class UserInterface:
                 pass
         
         return filePath
-            
+
+import maya.utils 
+import maya.cmds
+def doSphere():
+	UserInterface.display()
+maya.utils.executeDeferred( doSphere )
         
-UserInterface.display()
