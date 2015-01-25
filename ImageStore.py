@@ -80,7 +80,6 @@ try:
     import pymel.core as py
     import maya.utils as utils
     mayaEnvironment = True
-    UI = MayaUserInterface.display
 except:
     pass
 
@@ -2730,7 +2729,7 @@ class MayaUserInterface:
             
             with py.columnLayout( "Debug" ):
                 
-                with py.frameLayout( label = "Write", collapsable = True, collapse = False, width = self.windowWidth/100*101 ):
+                with py.frameLayout( label = "Write", collapsable = True, collapse = True, width = self.windowWidth/100*101 ):
                     with py.rowColumnLayout( numberOfColumns = 5 ):
                         
                         py.text( label="", width = self.windowWidth/100*1 )
@@ -2778,6 +2777,8 @@ class MayaUserInterface:
                         self.textFieldList["DebugSizeImage"] = py.textField( width = self.windowWidth/100*98.5, editable = False )
                         py.text( label = "", width = self.windowWidth/100*1 )
                         
+                with py.frameLayout( label = "Other", collapsable = True, collapse = True, width = self.windowWidth/100*101 ):
+                    py.button( label = "Reload User Interface", command = py.Callback( self.display ) )
         
         with py.rowColumnLayout( numberOfColumns = 5 ):
             
@@ -3328,6 +3329,7 @@ class MayaUserInterface:
         if ImageStore().readImage( imageLocation ):
             py.checkBox( self.checkBoxList["ImagePathExists"], edit = True, value = True )
             py.button( self.buttonList["MainReadImage"], edit = True, enable = True )
+            py.frameLayout( self.frameLayoutList["MainRead"], edit = True, collapse = False )
             valid = True
         else:
             py.checkBox( self.checkBoxList["ImagePathExists"], edit = True, value = False )
@@ -3361,6 +3363,7 @@ class MayaUserInterface:
                 
             py.checkBox( self.checkBoxList["ImagePathWriteable"], edit = True, value = True )
             py.button( self.buttonList["MainWriteImage"], edit = True, enable = True )
+            py.frameLayout( self.frameLayoutList["MainWrite"], edit = True, collapse = False )
             valid = True
             
         except:
@@ -3405,7 +3408,10 @@ class MayaUserInterface:
         
         return filePath
 
-        
+if mayaEnvironment:
+    UI = MayaUserInterface.display
+    
 if __name__ == '__main__':
     if mayaEnvironment == True:
         UI()
+
