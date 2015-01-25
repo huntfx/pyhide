@@ -24,6 +24,16 @@ class MayaUserInterface:
     progressBarList = {}
     
     @classmethod
+    def setFinalValues( self ):
+        mainImageCheck = py.button( self.buttonList['ValidateMainImage'], query = True, command = True )
+        customImageCheck = py.button( self.buttonList['ValidateCustomImage'], query = True, command = True )
+        py.textField( self.textFieldList["MainImagePath"], edit = True, changeCommand = py.Callback( mainImageCheck ), enterCommand = py.Callback( mainImageCheck ) )
+        py.textField( self.textFieldList["CustomImagePath"], edit = True, changeCommand = py.Callback( customImageCheck ), enterCommand = py.Callback( customImageCheck ) )
+        self.saveOutputAsFile()
+        self.uploadCheckBox()
+        self.checkPathToImage( False )
+        
+    @classmethod
     def display( self ):
 
         if py.window( self.windowName, exists = True ):
@@ -74,7 +84,7 @@ class MayaUserInterface:
             self.textList["ValidateCustomImage"] = py.text( label = "0", visible = False )
             py.text( label = "" )
             py.text( label = "" )
-            self.textFieldList["CustomImagePath"] = py.textField( text = "http://images.peterhuntvfx.co.uk/music.jpg", annotation = "Choose a path or URL to an image (optional)" )
+            self.textFieldList["CustomImagePath"] = py.textField( annotation = "Choose a path or URL to an image (optional)" )
             py.text( label = "" )
             
             with py.rowColumnLayout( numberOfColumns = 2 ):
@@ -91,8 +101,7 @@ class MayaUserInterface:
             py.text( label = "" )
             with py.rowColumnLayout( numberOfColumns = 2 ):
                 
-                #Important button for reading
-                self.buttonList["Deferred"] = py.button( label = "Browse", visible = False )
+                py.button( label = "Browse", visible = False )
                 
                 with py.rowColumnLayout( numberOfColumns = 3 ):
                     self.buttonList["RenderView"] = {}
@@ -115,9 +124,9 @@ class MayaUserInterface:
     
             with py.columnLayout( "Main" ):
                 
-                with py.frameLayout( label = "Write", collapsable = True, collapse = False, width = self.windowWidth/100*99.5 ):
+                with py.frameLayout( label = "Write", collapsable = True, collapse = False, width = self.windowWidth/100*101 ) as self.frameLayoutList["MainWrite"]:
                     with py.rowColumnLayout( numberOfColumns = 3 ):
-                        with py.rowColumnLayout( numberOfColumns = 1, width = self.windowWidth/100*49 ):
+                        with py.rowColumnLayout( numberOfColumns = 1, width = self.windowWidth/100*50 ):
                             
                             py.text( label = "   Input data:", align = "left", width = self.windowWidth/100*45.2 )
                             self.textFieldList["InputData"] = py.textField( text = "Store this text in an image", changeCommand = py.Callback( self.validateInput ), annotation = "Write anything to store in an image" )
@@ -140,67 +149,72 @@ class MayaUserInterface:
                                 self.buttonList["ValidateInputFile"] = py.button( label = "Validate", command = py.Callback( self.validateInput, "file" ), annotation = "Check if the file can be read", width = self.windowWidth/100*9 )
         
                         py.text( label = "", width = self.windowWidth/100*1 )
-                        with py.rowColumnLayout( numberOfColumns = 1, width = self.windowWidth/100*49 ):
+                        with py.rowColumnLayout( numberOfColumns = 1, width = self.windowWidth/100*50 ):
                             py.text( label = "   Upload:", align="left" )
-                            self.checkBoxList["UploadMainImage"] = py.checkBox( label = "Upload output image", changeCommand = py.Callback( self.uploadCheckBox ) )
-                            self.checkBoxList["OpenMainImage"] = py.checkBox( label = "Open uploaded image in browser" )
-                            self.checkBoxList["UploadCustomImage"] = py.checkBox( label = "Upload custom image (recommended)", value = True )
+                            self.checkBoxList["UploadMainImage"] = py.checkBox( label = "Upload output image", changeCommand = py.Callback( self.uploadCheckBox ), annotation = "Upload the encoded image" )
+                            self.checkBoxList["OpenMainImage"] = py.checkBox( label = "Open uploaded image in browser", annotation = "Open the URL in a browser" )
+                            self.checkBoxList["UploadCustomImage"] = py.checkBox( label = "Upload custom image (recommended)", value = True, annotation = "Upload the original custom image" )
                             py.text( label = "" )
                             py.text( label = "   Set ratio of width to height:", align="left" )
-                            self.floatSliderGrpList["Ratio"] = py.floatSliderGrp( field = True, minValue = 0.2, maxValue = 0.8, fieldMinValue = 0.0001, fieldMaxValue = 0.9999, precision = 4, value = math.log( 1920 ) / math.log( 1920*1080 ) )
+                            self.floatSliderGrpList["Ratio"] = py.floatSliderGrp( field = True, minValue = 0.2, maxValue = 0.8, fieldMinValue = 0.0001, fieldMaxValue = 0.9999, precision = 4, value = math.log( 1920 ) / math.log( 1920*1080 ), annotation = "Set width to height ratio for when not using custom images" )
         
-        
-                with py.frameLayout( label = "Read", collapsable = True, collapse = False, width = self.windowWidth/100*99.5 ):
+                
+                with py.frameLayout( label = "Read", collapsable = True, collapse = False, width = self.windowWidth/100*101 ) as self.frameLayoutList["MainRead"]:
                     with py.rowColumnLayout( numberOfColumns = 3 ):
-                        with py.rowColumnLayout( numberOfColumns = 1, width = self.windowWidth/100*49 ):
+                        with py.rowColumnLayout( numberOfColumns = 1, width = self.windowWidth/100*50 ):
                             py.radioCollection()
                             with py.rowColumnLayout( numberOfColumns = 3 ):
-                                self.radioButtonList["ReturnAll"] = py.radioButton( label = "Return all data" )
+                                self.radioButtonList["ReturnAll"] = py.radioButton( label = "Return all data", annotation = "Output all data" )
                                 py.textField( width = self.windowWidth/100*10, visible = False )
                                 py.text( label = "" )
-                            with py.rowColumnLayout( numberOfColumns = 3 ):
+                            with py.rowColumnLayout( numberOfColumns = 3, annotation = "Output up to a maximum amount of data" ):
                                 returnSomeDataCommand = py.Callback( self.returnSomeData )
-                                self.radioButtonList["ReturnSome"] = py.radioButton( label = "Return ", select = True )
+                                self.radioButtonList["ReturnSome"] = py.radioButton( label = "Return ", select = True  )
                                 self.textFieldList["ReturnSome"] = py.textField( text = 100000, width = self.windowWidth/100*10, receiveFocusCommand = returnSomeDataCommand, changeCommand = returnSomeDataCommand, enterCommand = returnSomeDataCommand )
                                 py.text( label = " characters of data" )
                         py.text( label = "", width = self.windowWidth/100*1 )
-                        with py.rowColumnLayout( numberOfColumns = 1, width = self.windowWidth/100*49 ):
-                            self.checkBoxList["SaveAsFile"] = py.checkBox( label = "Save as file", changeCommand = py.Callback( self.saveOutputAsFile ) )
+                        with py.rowColumnLayout( numberOfColumns = 1, width = self.windowWidth/100*50 ):
+                            self.checkBoxList["SaveAsFile"] = py.checkBox( label = "Save as file", changeCommand = py.Callback( self.saveOutputAsFile ), annotation = "Save the output data as a file" )
                             with py.rowColumnLayout( numberOfColumns = 3 ):
-                                self.textFieldList["SaveAsFile"] = py.textField( width = self.windowWidth/100*35 )
+                                self.textFieldList["SaveAsFile"] = py.textField( width = self.windowWidth/100*38, annotation = "Choose a location to save to" )
                                 py.text( label = "" )
-                                self.buttonList["SaveAsFile"] = py.button( label = "Browse", command = py.Callback( self.fileReading, True, False, "textField", "SaveAsFile" ) )
+                                self.buttonList["SaveAsFile"] = py.button( label = "Browse", command = py.Callback( self.fileReading, True, False, "textField", "SaveAsFile" ), annotation = "Save a new file" )
                                 
                     with py.rowColumnLayout( numberOfColumns = 3, width = self.windowWidth/100*99.5 ):
                         py.text( label = "", width = self.windowWidth/100*1 )
-                        self.checkBoxList["UseCustomURL"] = py.checkBox( label = "Use custom image path instead of stored URL (enable if custom image URL was not saved to the image)" )
+                        self.checkBoxList["UseCustomURL"] = py.checkBox( label = "Use custom image path instead of stored URL (enable if custom image URL was not saved to the image)", annotation = "Override stored URL and use the image chosen in the custom image path" )
                         py.text( label = "", width = self.windowWidth/100*1 )
-        
+
+            
             with py.columnLayout( "Advanced" ):
                 
-                with py.frameLayout( label = "Write", collapsable = True, collapse = False, width = self.windowWidth/100*99.5 ):
+                with py.frameLayout( label = "Write", collapsable = True, collapse = False, width = self.windowWidth/100*101 ):
                     with py.rowColumnLayout( numberOfColumns = 3 ):
                         py.text( label = "", width = self.windowWidth/100*1 )
                         with py.rowColumnLayout( numberOfColumns = 1, width = self.windowWidth/100*99.5 ):
-                            self.checkBoxList["Validate"] = py.checkBox( label = "Validate output image", value = True )
-                            self.checkBoxList["Revert"] = py.checkBox( label = "Cancel if custom image is too small (otherwise the custom image will just be disabled)" )
-                            self.checkBoxList["SaveInformation"] = py.checkBox( label = "Save extra information into file (recommended)", value = True )
+                            self.checkBoxList["Validate"] = py.checkBox( label = "Validate output image", value = True, annotation = "Check image can be read after creation" )
+                            self.checkBoxList["Revert"] = py.checkBox( label = "Cancel if custom image is too small (otherwise the custom image will just be disabled)", annotation = "Disable reverting back to the default method if the custom image is too small" )
+                            self.checkBoxList["SaveInformation"] = py.checkBox( label = "Save extra information into file (recommended)", value = True, annotation = "Save a few small files into the image to do with how the image was created" )
                         py.text( label = "", width = self.windowWidth/100*1 )
                         
-                with py.frameLayout( label = "Cutoff Modes", collapsable = True, collapse = True, width = self.windowWidth/100*99.5 ):
+                with py.frameLayout( label = "Cutoff Modes", collapsable = True, collapse = True, width = self.windowWidth/100*101 ):
                     
                     with py.rowColumnLayout( numberOfColumns = 1 ):
                         py.text( label = "   Cutoff modes define if the values should be added or subtracted based on the brightness of the pixel.", align = "left" )
                         
                     with py.rowColumnLayout( numberOfColumns = 5 ):
                         py.text( label="", width = self.windowWidth/100*1 )
-                        with py.rowColumnLayout( numberOfColumns = 1, width = self.windowWidth/100*48 ):
-                            self.checkBoxList["AllCutoffModes"] = py.checkBox( label = "Use all cutoff modes", changeCommand = py.Callback( self.addNewCutoffMode, *range( 8 ) ) )
-                            self.textList["CutoffModesTemporary"] = py.text( label = "", visible = False )
-                            py.text( label="   Select cutoff mode(s):", align="left", width = self.windowWidth/100*45.2 )
-                            self.textFieldList["CutoffModes"] = py.textField( enterCommand = py.Callback( self.addNewCutoffMode ), changeCommand = py.Callback( self.addNewCutoffMode ) )
+                        with py.rowColumnLayout( numberOfColumns = 1, width = self.windowWidth/100*49.25 ):
+                            self.checkBoxList["AllCutoffModes"] = py.checkBox( label = "Use all cutoff modes", changeCommand = py.Callback( self.addNewCutoffMode, *range( 8 ) ), annotation = "Save an image with every one of the cutoff modes" )
                             
-                            with py.rowColumnLayout( numberOfColumns = 16 ):
+                            with py.rowColumnLayout( numberOfColumns = 2 ):
+                                self.textList["CutoffModesTemporary"] = py.text( label = "", visible = False )
+                                self.checkBoxList["RevertTemporary"] = py.checkBox( label = "", visible = False )
+                            
+                            py.text( label="   Select cutoff mode(s):", align="left", width = self.windowWidth/100*45.2 )
+                            self.textFieldList["CutoffModes"] = py.textField( enterCommand = py.Callback( self.addNewCutoffMode ), changeCommand = py.Callback( self.addNewCutoffMode ), annotation = "Enter multiple numbers separated by a comma or space" )
+                            
+                            with py.rowColumnLayout( numberOfColumns = 16, annotation = "Select cutoff modes to use" ):
                                 self.checkBoxList["CutoffMode"] = {}
                                 self.textList["CutoffMode"] = {}
                                 for i in range( 8 ):
@@ -212,56 +226,60 @@ class MayaUserInterface:
                                     
                             py.text( label = "" )
                             py.text( label="   File suffix used for saving multiple images:", align="left" )
-                            with py.rowColumnLayout( numberOfColumns = 3, width = self.windowWidth/100*45.2 ):
+                            with py.rowColumnLayout( numberOfColumns = 3, width = self.windowWidth/100*45.2, annotation = "How to name multiple images" ):
                                 self.textFieldList["MultipleImagesName"] = py.textField( text = "{0}/{1}.".format( ImageStore().defaultImageDirectory, ".".join( ImageStore().defaultImageName.split( "." )[:-1] ) ), editable=False, width = self.windowWidth/100*31 )
                                 self.textFieldList["MultipleImagesPrefix"] = py.textField( text = "m", width = self.windowWidth/100*8.7 )
                                 self.textFieldList["MultipleImagesSuffix"] = py.textField( text = ".png", editable=False, width = self.windowWidth/100*5.5 )                
                             
                         py.text( label="", width = self.windowWidth/100*1 )
-                        with py.rowColumnLayout( numberOfColumns = 1, width = self.windowWidth/100*48 ):
-                            py.scrollField( wordWrap = True, height = 135, width = self.windowWidth/100*47, enable = False, text = "0: Move towards 0<br>1: Move towards 64<br>2: Move towards 128<br>3: Move towards 192<br>4: Move towards 255<br>5: Move away from 64<br>6: Move away from 128<br>7: Move away from 192" )
+                        with py.rowColumnLayout( numberOfColumns = 1, width = self.windowWidth/100*49.25 ):
+                            
+                            py.scrollField( wordWrap = True, height = 135, width = self.windowWidth/100*48, enable = False, text = "<br>".join( ImageStore().write( cutoffModeHelp = True )[2:] ), annotation = "How each cutoff mode works" )
         
-                with py.frameLayout( label = "Cache", collapsable = True, collapse = True, width = self.windowWidth/100*99.5 ):
+                with py.frameLayout( label = "Cache", collapsable = True, collapse = True, width = self.windowWidth/100*101 ):
                     
                     with py.rowColumnLayout( numberOfColumns = 5 ):
                         py.text( label="", width = self.windowWidth/100*1 )
                         
-                        with py.rowColumnLayout( numberOfColumns = 1, width = self.windowWidth/100*48):
-                            self.checkBoxList["WriteCache"] = py.checkBox( label="Write information to cache file", value = True )
-                            py.text( label = "" )
-                            py.button( label = "Get MD5 hash of Custom Image", width = self.windowWidth/100*47, command = py.Callback( self.getImageMD5 ) )
+                        with py.rowColumnLayout( numberOfColumns = 1, width = self.windowWidth/100*49.25):
+                            self.checkBoxList["WriteCache"] = py.checkBox( label="Use cache file (recommended)", value = True, annotation = "Write image data to a cache for faster subsequent runs" )
+                            py.text( label = "   Custom Image:", align = "left" )
+                            with py.rowColumnLayout( numberOfColumns = 3 ):
+                                py.button( label = "Get MD5 hash", width = self.windowWidth/100*23, command = py.Callback( self.getImageMD5 ) )
+                                py.text( label = "" )
+                                py.button( label = "Return Cache Contents", width = self.windowWidth/100*23, command = py.Callback( self.getImageMD5, True ) )
                             self.textFieldList["CustomImageHash"] = py.textField( editable = False )
-                            py.text( label = "" )
+                            py.text( label = "", height = 10 )
                             py.button( label = "Return Entire Cache Contents", width = self.windowWidth/100*47, command = py.Callback( self.getAllCacheInfo ) )
                             
                         py.text( label="", width = self.windowWidth/100*1 )
-                        with py.rowColumnLayout( numberOfColumns = 1, width = self.windowWidth/100*48):
+                        with py.rowColumnLayout( numberOfColumns = 1, width = self.windowWidth/100*49.25):
                             
                             py.text( label = "", height = 8 )
-                            py.text( label = "" )
                             
                             py.text( label = "   Delete MD5 hash from cache:", align = "left" )
+                            py.text( label = "      Type 'all' to delete everything", align = "left", enable = False )
                             with py.rowColumnLayout( numberOfColumns = 3 ):
-                                self.textFieldList["ImageMD5Delete"] = py.textField( width = self.windowWidth/100*35 )
+                                self.textFieldList["ImageMD5Delete"] = py.textField( width = self.windowWidth/100*38, annotation = "Enter value to remove from cache" )
                                 py.text( label = "" )
-                                py.button( label = "Delete", width = self.windowWidth/100*8, command = py.Callback( self.deleteCacheKey ) )
+                                py.button( label = "Delete", width = self.windowWidth/100*8, command = py.Callback( self.deleteCacheKey ), annotation = "Delete value" )
                             py.text( label = "" )
                             
                             py.text( label = "   Return information for MD5 hash:", align = "left" )
                             with py.rowColumnLayout( numberOfColumns = 3 ):
-                                self.textFieldList["ImageMD5Return"] = py.textField( width = self.windowWidth/100*35 )
+                                self.textFieldList["ImageMD5Return"] = py.textField( width = self.windowWidth/100*38, annotation = "Enter value to search for" )
                                 py.text( label = "" )
-                                py.button( label = "Return", width = self.windowWidth/100*8, command = py.Callback( self.getImageMD5Info ) )
+                                py.button( label = "Return", width = self.windowWidth/100*8, command = py.Callback( self.getImageMD5Info ), annotation = "Search cache" )
                                 
                                 
                         py.text( label="", width = self.windowWidth/100*1 )
                         
-                    py.text( label = "" )
+                    #py.text( label = "" )
                     
                     with py.frameLayout( label = "Cache Output", collapsable = True, collapse = True, width = self.windowWidth/100*99 ) as self.frameLayoutList["CacheOutput"]:
                         self.scrollFieldList["CacheOutput"] = py.scrollField( height = 200 )
             
-                with py.frameLayout( label = "Other", collapsable = True, collapse = True, width = self.windowWidth/100*99.5 ):
+                with py.frameLayout( label = "Other", collapsable = True, collapse = True, width = self.windowWidth/100*101 ):
                     with py.rowColumnLayout( numberOfColumns = 3 ):
                         py.text( label = "", width = self.windowWidth/100*1 )
                         with py.rowColumnLayout( numberOfColumns = 1, width = self.windowWidth/100*99.5 ):
@@ -270,28 +288,28 @@ class MayaUserInterface:
             
             with py.columnLayout( "Debug" ):
                 
-                with py.frameLayout( label = "Write", collapsable = True, collapse = False, width = self.windowWidth/100*99.5 ):
+                with py.frameLayout( label = "Write", collapsable = True, collapse = False, width = self.windowWidth/100*101 ):
                     with py.rowColumnLayout( numberOfColumns = 5 ):
                         py.text( label="", width = self.windowWidth/100*1 )
-                        with py.rowColumnLayout( numberOfColumns = 1, width = self.windowWidth/100*48):
+                        with py.rowColumnLayout( numberOfColumns = 1, width = self.windowWidth/100*49.25):
                             self.checkBoxList["ReturnCustomURL"] = py.checkBox( label="Return URL to custom image after uploading", value = True )
                         py.text( label="", width = self.windowWidth/100*1 )
-                        with py.rowColumnLayout( numberOfColumns = 1, width = self.windowWidth/100*48):
+                        with py.rowColumnLayout( numberOfColumns = 1, width = self.windowWidth/100*49.25):
                             self.checkBoxList["DebugData"] = py.checkBox( label="Enable debug write mode" )
                         py.text( label="", width = self.windowWidth/100*1 )
                 
-                with py.frameLayout( label = "Size", collapsable = True, collapse = False, width = self.windowWidth/100*99.5 ):
+                with py.frameLayout( label = "Size", collapsable = True, collapse = False, width = self.windowWidth/100*101 ):
                     with py.rowColumnLayout( numberOfColumns = 5 ):
                         py.text( label="", width = self.windowWidth/100*1 )
                         with py.rowColumnLayout( numberOfColumns = 1, width = self.windowWidth/100*30):
                             py.text( label = "" )
                             py.button( label = "Calculate size of input value", width = self.windowWidth/100*30, command = py.Callback( self.calculateSizeOfInput ) )
                         py.text( label="", width = self.windowWidth/100*1 )
-                        with py.rowColumnLayout( numberOfColumns = 1, width = self.windowWidth/100*66):
+                        with py.rowColumnLayout( numberOfColumns = 1, width = self.windowWidth/100*68):
                             
                             py.text( label = "   Calculate how much data an image can hold:", align = "left" )
                             with py.rowColumnLayout( numberOfColumns = 5 ):
-                                self.textFieldList["CalculateImageSize"] = py.textField( width = self.windowWidth/100*46 )
+                                self.textFieldList["CalculateImageSize"] = py.textField( width = self.windowWidth/100*49.25 )
                                 py.text( label = "" )
                                 py.button( label = "Browse", width = self.windowWidth/100*8, command = py.Callback( self.fileReading, False, True, "textField", "CalculateImageSize" ), annotation = "Open an image" )
                                 py.text( label = "" )
@@ -299,56 +317,51 @@ class MayaUserInterface:
                         py.text( label="", width = self.windowWidth/100*1 )
                     with py.rowColumnLayout( numberOfColumns = 3 ):
                         py.text( label = "", width = self.windowWidth/100*1 )
-                        self.textFieldList["DebugSizeInput"] = py.textField( width = self.windowWidth/100*96, editable = False )
+                        self.textFieldList["DebugSizeInput"] = py.textField( width = self.windowWidth/100*98.5, editable = False )
                         py.text( label = "", width = self.windowWidth/100*1 )
                         py.text( label = "", width = self.windowWidth/100*1 )
-                        self.textFieldList["DebugSizeImage"] = py.textField( width = self.windowWidth/100*96, editable = False )
+                        self.textFieldList["DebugSizeImage"] = py.textField( width = self.windowWidth/100*98.5, editable = False )
                         py.text( label = "", width = self.windowWidth/100*1 )
                         
-                 
+        
         with py.rowColumnLayout( numberOfColumns = 5 ):
             py.text( label="", width = self.windowWidth/100*1 )
-            py.button( label = "Write Image", width = self.windowWidth/100*49, command = py.Callback( self.writeImage ) )
+            self.buttonList["MainWriteImage"] = py.button( label = "Write Image", width = self.windowWidth/100*49.5, command = py.Callback( self.writeImage ), annotation = "Write a new image using the current settings" )
             py.text( label = "", width = self.windowWidth/100*1 )
-            py.button( label = "Read Image", width = self.windowWidth/100*49, command = py.Callback( self.readImage ) )
+            self.buttonList["MainReadImage"] = py.button( label = "Read Image", width = self.windowWidth/100*49.5, command = py.Callback( self.readImage ), annotation = "Read an existing image using the current settings" )
             py.text( label = "", width = self.windowWidth/100*1 ) 
-                
+               
         with py.rowColumnLayout( numberOfColumns = 3 ):
             py.text( label="", width = self.windowWidth/100*1 )
-            self.textList["ProgressBar"] = py.text( label = "Waiting for input...", width = self.windowWidth/100*98.5 )
+            self.textList["ProgressBar"] = py.text( label = "Waiting for input...", width = self.windowWidth/100*99.5, annotation = "Current progress" )
             py.text( label="", width = self.windowWidth/100*1 )
             py.text( label = "" )
-            self.progressBarList["ProgressBar"] = py.progressBar( progress = 0 )
+            self.progressBarList["ProgressBar"] = py.progressBar( progress = 0, annotation = "Overall progress" )
             py.text( label = "" ) 
             
-            
         with py.rowColumnLayout( numberOfColumns = 1 ):
-            with py.frameLayout( label = "Progress", collapsable = True, collapse = True, visible = True, width = self.windowWidth/100*101 ) as self.frameLayoutList["OutputProgress"]:
-                self.scrollFieldList["OutputProgress"] = py.scrollField( height = 160, editable = False ) 
-                
-            with py.frameLayout( label = "Write Output", collapsable = True, collapse = True, visible = True, width = self.windowWidth/100*101 ) as self.frameLayoutList["OutputWrite"]:
-                
-                with py.rowColumnLayout( numberOfColumns = 5 ):
-                    py.text( label="", width = self.windowWidth/100*1 )
+            with py.rowColumnLayout( numberOfColumns = 1 ):
+                with py.frameLayout( label = "Progress", collapsable = True, collapse = True, visible = True, width = self.windowWidth/100*101.5 ) as self.frameLayoutList["OutputProgress"]:
+                    self.scrollFieldList["OutputProgress"] = py.scrollField( height = 160, editable = False, annotation = "Progress history" ) 
                     
-                    with py.rowColumnLayout( numberOfColumns = 1, width = self.windowWidth/100*48 ):
-                        py.text( label="   Path(s):", align = "left", width = self.windowWidth/100*45.2 )
-                        self.scrollFieldList["OutputPath"] = py.scrollField( height = 65, editable = False )
-                
-                
-                    py.text( label="", width = self.windowWidth/100*1 )
-                    with py.rowColumnLayout( numberOfColumns = 1, width = self.windowWidth/100*48 ):
-                        py.text( label="   URL:", align = "left", width = self.windowWidth/100*45.2 )
-                        self.textFieldList["OutputURL"] = py.textField( editable = False )
-                        py.text( label = "" )
-                        py.text( label="   Custom Image URL:", align = "left", width = self.windowWidth/100*45.2 )
-                        self.textFieldList["OutputCustomURL"] = py.textField( editable = False )
+                with py.frameLayout( label = "Write Output", collapsable = True, collapse = True, visible = True, width = self.windowWidth/100*101 ) as self.frameLayoutList["OutputWrite"]:
+                    
+                    with py.rowColumnLayout( numberOfColumns = 3 ):
+                        py.text( label="", width = self.windowWidth/100*1 )
+                        with py.rowColumnLayout( numberOfColumns = 1, width = self.windowWidth/100*99 ):
+                            py.text( label="   Path(s):", align = "left", width = self.windowWidth/100*45.2 )
+                            self.scrollFieldList["OutputPath"] = py.scrollField( height = 60, width = self.windowWidth/100*99, editable = False, annotation = "Path to saved image" )
+                            #py.text( label = "" )
+                            py.text( label="   URL(s):", align = "left", width = self.windowWidth/100*45.2 )
+                            self.scrollFieldList["OutputURL"] = py.scrollField( height = 60, width = self.windowWidth/100*99, editable = False, annotation = "URL to uploaded image" )
+                            #py.text( label = "" )
+                            py.text( label="   Custom Image URL:", align = "left", width = self.windowWidth/100*45.2 )
+                            self.scrollFieldList["OutputCustomURL"] = py.scrollField( height = 27, width = self.windowWidth/100*99, editable = False, annotation = "URL to original custom image" )
+                        py.text( label="", width = self.windowWidth/100*1 )
                         
-                    py.text( label="", width = self.windowWidth/100*1 )
-                    
-            with py.frameLayout( label = "Read Output", collapsable = True, collapse = True, visible = True, width = self.windowWidth/100*101 ) as self.frameLayoutList["OutputRead"]:
-                self.scrollFieldList["OutputRead"] = py.scrollField( height = 260, editable = False, wordWrap = True ) 
-            
+                with py.frameLayout( label = "Read Output", collapsable = True, collapse = True, visible = True, width = self.windowWidth/100*101 ) as self.frameLayoutList["OutputRead"]:
+                    self.scrollFieldList["OutputRead"] = py.scrollField( height = 260, editable = False, wordWrap = True, annotation = "Data read from image" ) 
+         
         self.setFinalValues()
         py.showWindow()
     
@@ -367,14 +380,14 @@ class MayaUserInterface:
             if py.text( self.textList["ValidateCustomImage"], query = True, label = True ) == "1":
                 kwargs["CustomImagePath"] = customImagePath
         
-        returnSomeData = None
+        self.returnSomeData = None
         returnAllData = py.radioButton( self.radioButtonList["ReturnAll"], query = True, select = True )
         if returnAllData == False:
-            returnSomeData = py.textField( self.textFieldList["ReturnSome"], query = True, text = True ).replace( ",", "" ).replace( " ", "" )
-            if not returnSomeData.isdigit():
-                returnSomeData = 100000
+            self.returnSomeData = py.textField( self.textFieldList["ReturnSome"], query = True, text = True ).replace( ",", "" ).replace( " ", "" )
+            if not self.returnSomeData.isdigit():
+                self.returnSomeData = 100000
             else:
-                returnSomeData = int( returnSomeData )
+                self.returnSomeData = int( self.returnSomeData )
         kwargs["OutputInformation"] = True
         
         
@@ -382,21 +395,37 @@ class MayaUserInterface:
         mainKwargs["ScrollField"] = self.scrollFieldList["OutputProgress"]
         mainKwargs["ProgressBarName"] = self.progressBarList["ProgressBar"]
         mainKwargs["progressBarText"] = self.textList["ProgressBar"]
-        mainKwargs["DeferredWriteCommand"] = self.deferredWrite
+        mainKwargs["DeferredReadCommand"] = self.deferredRead
+        mainKwargs["WriteToCache"] = py.checkBox( self.checkBoxList["WriteCache"], query = True, value = True )
         
         
         outputData = None
         if py.text( self.textList["ValidateMainImage"], query = True, label = True ) != "1":
             py.button( self.buttonList["ValidateMainImage"], query = True, command = True )()
         if py.checkBox( self.checkBoxList["ImagePathExists"], query = True, value = True ):
-            outputData = ImageStore( imagePath, **mainKwargs ).read( **kwargs )
+            #outputData = ImageStore( imagePath, **mainKwargs ).read( **kwargs )
+            utils.executeDeferred( ImageStore( imagePath, **mainKwargs ).read, **kwargs )
+        
+    
+    @classmethod
+    def deferredRead( self, outputData = None ):
         
         if not outputData:
             outputData = "Unable to read image"
-            returnSomeData = len( outputData )
+            self.returnSomeData = len( outputData )
             
-        py.scrollField( self.scrollFieldList["OutputRead"], edit = True, text = str( outputData )[0:returnSomeData] )
+        py.scrollField( self.scrollFieldList["OutputRead"], edit = True, text = str( outputData )[0:self.returnSomeData] )
         py.frameLayout( self.frameLayoutList["OutputRead"], edit = True, collapse = False )
+        self.setFinalValues()
+        
+        saveAsFile = py.checkBox( self.checkBoxList["SaveAsFile"], query = True, value = True )
+        if saveAsFile and outputData:
+            saveToLocation = py.textField( self.textFieldList["SaveAsFile"], query = True, text = True )
+            try:
+                with open( saveToLocation, "w" ) as fileName:
+                    fileName.write( outputData )
+            except:
+                print "Error: Unable to save file."
     
     @classmethod
     def writeImage( self ):
@@ -435,7 +464,6 @@ class MayaUserInterface:
         if cutoffPrefix:
             kwargs["CutoffModePrefix"] = cutoffPrefix
             
-        kwargs["WriteToCache"] = py.checkBox( self.checkBoxList["WriteCache"], query = True, value = True )
         
         kwargs["returnCustomImageURL"] = py.checkBox( self.checkBoxList["ReturnCustomURL"], query = True, value = True )
         kwargs["debugOutput"] = py.checkBox( self.checkBoxList["DebugData"], query = True, value = True )
@@ -445,12 +473,12 @@ class MayaUserInterface:
         mainKwargs["ProgressBarName"] = self.progressBarList["ProgressBar"]
         mainKwargs["progressBarText"] = self.textList["ProgressBar"]
         mainKwargs["DeferredWriteCommand"] = self.deferredWrite
+        mainKwargs["WriteToCache"] = py.checkBox( self.checkBoxList["WriteCache"], query = True, value = True )
         #ImageStore( imagePath, **mainKwargs ).write( **kwargs )
         utils.executeDeferred( ImageStore( imagePath, **mainKwargs ).write, **kwargs )
         
     @classmethod
     def deferredWrite( self, outputLocations, returningCustomURL = False ):
-        
         
         imagePaths = []
         imageURLs = []
@@ -469,9 +497,10 @@ class MayaUserInterface:
             imagePaths.append( "Image wasn't saved" )
         
         py.scrollField( self.scrollFieldList["OutputPath"], edit = True, text = "<br>".join( imagePaths ) )
-        py.textField( self.textFieldList["OutputURL"], edit = True, text = ", ".join( imageURLs ) )
-        py.textField( self.textFieldList["OutputCustomURL"], edit = True, text = ", ".join( list( set( customURL ) ) ) )
+        py.scrollField( self.scrollFieldList["OutputURL"], edit = True, text = "<br>".join( imageURLs ) )
+        py.scrollField( self.scrollFieldList["OutputCustomURL"], edit = True, text = "<br>".join( list( set( customURL ) ) ) )
         py.frameLayout( self.frameLayoutList["OutputWrite"], edit = True, collapse = False )
+        self.setFinalValues()
         
     
     @classmethod
@@ -514,7 +543,10 @@ class MayaUserInterface:
         
         imageHash = py.textField( self.textFieldList["ImageMD5Delete"], query = True, text = True )
         if imageHash:
-            ImageStore().cache( deleteKey = imageHash )
+            if imageHash.lower().replace( " ", "" ) == "all":
+                ImageStore().cache( cleanCache = True )
+            else:
+                ImageStore().cache( deleteKey = imageHash )
         
     @classmethod
     def updateCacheOutput( self, cacheContents, individualValue = False ):
@@ -526,10 +558,7 @@ class MayaUserInterface:
                 cacheContents = newReplace
                 newReplace = cacheContents.replace( "&nbsp; ", "&nbsp;&nbsp;" )
         else:
-            if individualValue == True:
-                newReplace = "No cache data found matching the input"
-            else:
-                newReplace = "No cache data found"
+            newReplace = "No cache data found"
         
         #Write to the scroll field
         py.frameLayout( self.frameLayoutList["CacheOutput"], edit = True, collapse = False )
@@ -550,13 +579,25 @@ class MayaUserInterface:
     
     
     @classmethod
-    def getImageMD5( self ):
+    def getImageMD5( self, getContents = False ):
         
         #Get hash of currently selected image
         imageLocation = ImageStore().getImageLocation( py.textField( self.textFieldList["CustomImagePath"], query = True, text = True ) )
         imageHash = ImageStore().cache( MD5 = imageLocation )
         if not imageHash:
             imageHash = "Unable to read image"
+        else:
+            
+            if getContents == True:
+                self.updateCacheOutput( ImageStore().cache( key = imageHash ), True )
+                return
+            
+            deleteHash = py.textField( self.textFieldList["ImageMD5Delete"], query = True, text = True )
+            returnHash = py.textField( self.textFieldList["ImageMD5Return"], query = True, text = True )
+            if not deleteHash:
+                py.textField( self.textFieldList["ImageMD5Delete"], edit = True, text = imageHash )
+            if not returnHash:
+                py.textField( self.textFieldList["ImageMD5Return"], edit = True, text = imageHash )
         py.textField( self.textFieldList["CustomImageHash"], edit = True, text = imageHash )
         ImageStore().renderView( False )
     
@@ -597,11 +638,16 @@ class MayaUserInterface:
         if len( args ) == 8:
             enableValue = py.checkBox( self.checkBoxList["AllCutoffModes"], query = True, value = True )
             
+            py.checkBox( self.checkBoxList["Revert"], edit = True, enable = not enableValue )
+            
             #Store values in hidden text field
             if enableValue:
                 py.text( self.textList["CutoffModesTemporary"], edit = True, label = ",".join( [str( num ) for num in allNumbers] ) )
+                py.checkBox( self.checkBoxList["RevertTemporary"], edit = True, value = py.checkBox( self.checkBoxList["Revert"], query = True, value = True ) )
+                py.checkBox( self.checkBoxList["Revert"], edit = True, value = True )
             else:
                 newArgs = ["return"] + [int( num ) for num in py.text( self.textList["CutoffModesTemporary"], query = True, label = True ).split( "," ) if num.isdigit()]
+                py.checkBox( self.checkBoxList["Revert"], edit = True, value = py.checkBox( self.checkBoxList["RevertTemporary"], query = True, value = True ) )
                 
             py.textField( self.textFieldList["CutoffModes"], edit = True, enable = not enableValue )
             
@@ -622,8 +668,17 @@ class MayaUserInterface:
         
         py.textField( self.textFieldList["CutoffModes"], edit = True, text = ", ".join( [str( num ) for num in allNumbers if num in range( 8 )] ) )
         
+        for number in allNumbers:
+            if str( number ).isdigit():
+                if number in range( 8 ):
+                    py.checkBox( self.checkBoxList["CutoffMode"][number], edit = True, value = True )
+        
         if len( newArgs ) > 0:
-            self.addNewCutoffMode( *newArgs )
+            try:
+                self.addNewCutoffMode( *newArgs )
+            except:
+                pass
+            
     
     @classmethod
     def saveOutputAsFile( self ):
@@ -715,15 +770,6 @@ class MayaUserInterface:
             
     
     @classmethod
-    def setFinalValues( self ):
-        mainImageCheck = py.button( self.buttonList['ValidateMainImage'], query = True, command = True )
-        customImageCheck = py.button( self.buttonList['ValidateCustomImage'], query = True, command = True )
-        py.textField( self.textFieldList["MainImagePath"], edit = True, changeCommand = py.Callback( mainImageCheck ), enterCommand = py.Callback( mainImageCheck ) )
-        py.textField( self.textFieldList["CustomImagePath"], edit = True, changeCommand = py.Callback( customImageCheck ), enterCommand = py.Callback( customImageCheck ) )
-        self.saveOutputAsFile()
-        self.uploadCheckBox()
-        
-    @classmethod
     def disableCustomImage( self ):
         
         #Fix due to an error happening on the first run of the code when the checkbox doesn't exist
@@ -755,7 +801,8 @@ class MayaUserInterface:
     def checkPathToCustomImage( self ):
         
         #Get image information
-        imageLocation = ImageStore().getImageLocation( py.textField( self.textFieldList["CustomImagePath"], query = True, text = True ) )
+        rawImageLocation = py.textField( self.textFieldList["CustomImagePath"], query = True, text = True )
+        imageLocation = ImageStore().getImageLocation( rawImageLocation )
         imageHash = ImageStore( imageLocation ).cache( MD5 = True )
         disableCustomImage = py.checkBox( self.checkBoxList["DisableCustomImage"], query = True, value = True )
         if disableCustomImage == True:
@@ -764,7 +811,8 @@ class MayaUserInterface:
         #Test custom image
         valid = ImageStore( cleanTemporaryFiles = False ).write( testCustomImage = True, customImageLocation = imageLocation )
         
-        if imageLocation or py.button( self.buttonList["ValidateCustomImage"], query = True, label = True ) == "Invalid":
+        #Don't automatically say valid if nothing is there and image is written to
+        if rawImageLocation or py.button( self.buttonList["ValidateCustomImage"], query = True, label = True ) == "Invalid":
             if valid == True or py.textField( self.textFieldList["CustomImagePath"], query = True, text = True ) == "":
                 self.validButton( "ValidateCustomImage", True )
             else:
@@ -793,6 +841,7 @@ class MayaUserInterface:
 
     @classmethod
     def changeSceneSettings( self, imageFormat = None ):
+        
         if imageFormat:
             ImageStore().renderView( imageFormat )
         renderViewFormat, ignoreFormats, uploadFormats = ImageStore().imageFormats()
@@ -810,7 +859,7 @@ class MayaUserInterface:
        
         
     @classmethod
-    def checkPathToImage( self ):
+    def checkPathToImage( self, changeButtonColour = True ):
         
         
         valid = False
@@ -827,9 +876,12 @@ class MayaUserInterface:
         #Check if image can be read
         if ImageStore().readImage( imageLocation ):
             py.checkBox( self.checkBoxList["ImagePathExists"], edit = True, value = True )
+            py.button( self.buttonList["MainReadImage"], edit = True, enable = True )
             valid = True
         else:
             py.checkBox( self.checkBoxList["ImagePathExists"], edit = True, value = False )
+            py.frameLayout( self.frameLayoutList["MainRead"], edit = True, collapse = True )
+            py.button( self.buttonList["MainReadImage"], edit = True, enable = False )
         
         #Check if image location can be written to
         content = None
@@ -857,15 +909,19 @@ class MayaUserInterface:
                 
                 
             py.checkBox( self.checkBoxList["ImagePathWriteable"], edit = True, value = True )
+            py.button( self.buttonList["MainWriteImage"], edit = True, enable = True )
             valid = True
             
         except:
             py.checkBox( self.checkBoxList["ImagePathWriteable"], edit = True, value = False )
-            
-        if valid == True:
-            self.validButton( "ValidateMainImage", True )
-        else:
-            self.validButton( "ValidateMainImage", False )
+            py.frameLayout( self.frameLayoutList["MainWrite"], edit = True, collapse = True )
+            py.button( self.buttonList["MainWriteImage"], edit = True, enable = False )
+        
+        if changeButtonColour:
+            if valid == True:
+                self.validButton( "ValidateMainImage", True )
+            else:
+                self.validButton( "ValidateMainImage", False )
             
 
     @classmethod
@@ -898,7 +954,4 @@ class MayaUserInterface:
         
         return filePath
 
-
-if __name__ == '__main__':
-    if mayaEnvironment == True:
-        MayaUserInterface.display()
+MayaUserInterface.display()
