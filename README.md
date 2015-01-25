@@ -13,7 +13,6 @@ Alternatively, you may add a new search path to any location through the followi
 	import sys
 	sys.path.append( path to folder )
 	
-use `from ImageStore import ImageStore` to import the module.
 
 <br>
 
@@ -23,7 +22,16 @@ Load up imageStore.py and you can change the default save location of files and 
 
 <br>
 
-<h4>Usage:</h4>
+<h2>Maya Usage:</h2>
+	
+	#import module
+	import ImageStore
+	
+	#load user interface
+	ImageStore.UI()
+
+<h2>Normal Usage:</h2>
+<h4>Basic:</h4>
 
     #import module
     from ImageStore import ImageStore
@@ -66,13 +74,6 @@ Load up imageStore.py and you can change the default save location of files and 
      
 <br>
 
-<h4>Maya Specific Usage:</h4>
-
-	#Use the current render view image as a custom image
-	ImageStore().write( infoToStore, customImage = "RenderView" )
-
-<br>
-
 <h4>All Commands:</h4>
 
 	class ImageStore( imageName, **kwargs ):
@@ -86,6 +87,12 @@ Load up imageStore.py and you can change the default save location of files and 
 			p/print/printProgress
 			 - True/False
 			 - Set to false to disable all messages being printed
+				Default: True
+	
+			cache/writeCache
+			 - True/False
+			 - Store some calculated information to a cache file, which can dramatically improve execution times.
+			 - It runs on the hash of an image and takes up barely any space, so it's worthwile keeping activated.
 				Default: True
 	
 	
@@ -144,12 +151,6 @@ Load up imageStore.py and you can change the default save location of files and 
 				 - True/False 
 				 - Disable output of extra information such as time created, URL and username.
 					Default: False
-	
-				cache/writeCache
-				 - True/False
-				 - Store some calculated information to a cache file, which can dramatically improve loading times.
-				 - It runs on the hash of an image and takes up barely any space, so it's worthwile keeping activated.
-					Default: True
 	
 				uploadURLsToImgur
 				 - True/False
@@ -374,6 +375,9 @@ Reading the image simply reverses the process, but it requires every pixel to be
 	
 	v3.1.3:
 	Added in Maya specific code to use the render view window.
+	
+	v3.2:
+	Added full Maya user interface support, and fixed a lot of bugs in the process.
 
 <br>
 
