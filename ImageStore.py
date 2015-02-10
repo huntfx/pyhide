@@ -69,7 +69,7 @@ except:
         outputText = outputText.format( "" )
     except:
         outputText = outputText.format( " and requests" )
-    if printImportError == True:
+    if printImportError:
         print outputText
     overrideUpload = True
 
@@ -149,7 +149,8 @@ class ImageStore:
     readProgress["StoringPixels"] = 20
     readProgress["FirstPixel"] = 21
     readProgress["StoringCustomPixelInfo"] = 40
-    readProgress["ReadingData"] = 75
+    readProgress["ConvertingData"] = 70
+    readProgress["ReadingData"] = 85
     readProgress["TruncatingEnd"] = 90
     readProgress["Decoding"] = 100
         
@@ -162,7 +163,7 @@ class ImageStore:
         else:
             imageName = self.defaultImageName
         
-        if self.forceCustomFilenames == True:
+        if self.forceCustomFilenames:
             imageName = self.useThisCustomFilename
         self.imageName = imageName
         
@@ -176,7 +177,7 @@ class ImageStore:
         if "." in self.imageName:
             self.originalFormat = self.imageName.split( "." )[-1]
         
-        if ".".join( self.imageName.split( "." )[:-1] ) not in self.renderViewCheck or mayaEnvironment == False:
+        if ".".join( self.imageName.split( "." )[:-1] ) not in self.renderViewCheck or not mayaEnvironment:
     
             self.imageName = "{0}.png".format( str( imageName ).replace( "\\", "/" ).rsplit( '.', 1 )[0] )
             
@@ -195,14 +196,14 @@ class ImageStore:
         
         #Write image information to cache, can speed up code execution by a lot
         self.writeToINI = checkInputs.checkBooleanKwargs( kwargs, True, 'DB', 'INI', 'cache', 'writeDB', 'writeINI', 'writeCache', 'writeToDB', 'writeDatabase', 'writeToCache', 'self.writeToINI', 'writeToDatabase' )
-        if self.forceCacheWrite == True:
+        if self.forceCacheWrite:
             self.writeToINI = self.shouldWriteCache
         
         #For updating progress
-        if mayaEnvironment == True:
+        if mayaEnvironment:
             validArgs = checkInputs.validKwargs( kwargs, 'scrollField', 'scrollFieldToUpdate' )
             self.scrollFieldToUpdate = None
-            for i in range( len( validArgs ) ):
+            for i in xrange( len( validArgs ) ):
                 try:
                     py.scrollField( kwargs[validArgs[i]], query = True, text = True )
                     self.scrollFieldToUpdate = kwargs[validArgs[i]]
@@ -212,7 +213,7 @@ class ImageStore:
                     
             validArgs = checkInputs.validKwargs( kwargs, 'progressBar', 'progressBarName' )
             self.progressBar = None
-            for i in range( len( validArgs ) ):
+            for i in xrange( len( validArgs ) ):
                 try:
                     py.progressBar( kwargs[validArgs[i]], query = True, progress = True )
                     self.progressBar = kwargs[validArgs[i]]
@@ -222,7 +223,7 @@ class ImageStore:
                     
             validArgs = checkInputs.validKwargs( kwargs, 'progressBarText' )
             self.progressBarText = None
-            for i in range( len( validArgs ) ):
+            for i in xrange( len( validArgs ) ):
                 try:
                     py.text( kwargs[validArgs[i]], query = True, label = True )
                     self.progressBarText = kwargs[validArgs[i]]
@@ -232,7 +233,7 @@ class ImageStore:
                     
             validArgs = checkInputs.validKwargs( kwargs, 'callbackWrite', 'callbackWriteCommand', 'deferredWrite', 'deferredWriteCommand' )
             self.callbackWrite = None
-            for i in range( len( validArgs ) ):
+            for i in xrange( len( validArgs ) ):
                 try:
                     if inspect.ismethod( kwargs[validArgs[i]] ):
                         self.callbackWrite = kwargs[validArgs[i]]
@@ -242,7 +243,7 @@ class ImageStore:
                     
             validArgs = checkInputs.validKwargs( kwargs, 'callbackRead', 'callbackReadCommand', 'deferredRead', 'deferredReadCommand' )
             self.callbackRead = None
-            for i in range( len( validArgs ) ):
+            for i in xrange( len( validArgs ) ):
                 try:
                     if inspect.ismethod( kwargs[validArgs[i]] ):
                         self.callbackRead = kwargs[validArgs[i]]
@@ -254,7 +255,7 @@ class ImageStore:
         
     def getImageLocation( self, input ):
         
-        if mayaEnvironment == True and input in self.renderViewCheck:
+        if mayaEnvironment and input in self.renderViewCheck:
             self.renderView( True )
             imageLocation = self.renderViewSaveLocation
             self.originalFormat = self.imageFormats()[0][py.getAttr( "defaultRenderGlobals.imageFormat" )][0]
@@ -287,26 +288,27 @@ class ImageStore:
     def printCurrentProgress( self, text, display = True, percentComplete = None ):
     
         if not self.validateWrite:
-            if mayaEnvironment == True:
+            if mayaEnvironment:
                 
-                #utils.executeDeferred( self.updateMayaUI, text, display, percentComplete )
                 self.updateMayaUI( text, display, percentComplete )
                 
-            if self.printProgress == True:
+            if self.printProgress:
                 print text
                     
     
     def cleanTempFiles( self ):
-        if self.cleanTemporaryFiles == True:
+    
+        if self.cleanTemporaryFiles:
             self.renderView( False )
 
     def write( self, *args, **kwargs ):
         
-        if mayaEnvironment == True:
+        if mayaEnvironment:
             if self.progressBarText:
                 py.text( self.progressBarText, edit = True, label = "Setting up variables..." )
             if self.progressBar:
                 py.progressBar( self.progressBar, edit = True, progress = 0 )
+                
         results = self.actualWrite( *args, **kwargs )
         self.cleanTempFiles()
         
@@ -314,7 +316,7 @@ class ImageStore:
 
     def read( self, *args, **kwargs ):
         
-        if mayaEnvironment == True:
+        if mayaEnvironment:
             try:
                 if not self.validateWrite:
                     py.progressBar( self.progressBar, edit = True, progress = 0 )
@@ -330,27 +332,27 @@ class ImageStore:
         #self.printCurrentProgress( "Setting up variables...", True, 0 )
     
         input = None
-        if len( args ) > 0:
+        if args:
             input = args[0]
         else:
             validArgs = checkInputs.validKwargs( kwargs, 'input', 'inputData' )
-            for i in range( len( validArgs ) ):
+            for i in xrange( len( validArgs ) ):
                 try:
                     input = kwargs[validArgs[i]]
-                    if len( input ) > 0:
+                    if input:
                         break
                 except:
                     pass
                     
         #If image should be uploaded
         upload = checkInputs.checkBooleanKwargs( kwargs, False, 'u', 'upload', 'uploadImage' )
-        if overrideUpload == True:
+        if overrideUpload:
             upload = False
-        elif self.forceUpload == True:
+        elif self.forceUpload:
             upload = self.shouldUpload
         
         openImage = checkInputs.checkBooleanKwargs( kwargs, True, 'o', 'open', 'openImage', 'openUpload', 'openUploaded', 'openUploadImage', 'openUploadedImage' )
-        if self.forceOpenOnUpload == True:
+        if self.forceOpenOnUpload:
             openImage = self.shouldOpenOnUpload
         
         #If information should be disabled from being displayed
@@ -369,12 +371,12 @@ class ImageStore:
         
         #Delete file after creation
         deleteImage = checkInputs.checkBooleanKwargs( kwargs, False, 'dI', 'deleteImage', 'removeImage', 'disableSaving', 'noSave', 'noSaving', 'uploadOnly' )
-        if self.forceDeleteFile == True:
+        if self.forceDeleteFile:
             deleteImage = self.shouldDeleteFile
         
         #Output all input data as black to debug
         debugData = checkInputs.checkBooleanKwargs( kwargs, False, 'debug', 'debugData', 'debugResult', 'debugOutput' )
-        if debugData == True:
+        if debugData:
             padWithRandomData = False
             validateOutput = False
         else:
@@ -390,7 +392,7 @@ class ImageStore:
         outputSizeJoined = checkInputs.joinList( outputSizePrefix+[""], outputSizeMiddle+[""], outputSizeSuffix )
         outputSizeJoined += checkInputs.joinList( outputSizePrefix, outputSizeMiddle, outputSizeSuffix+[""] )
         outputSizeJoined += checkInputs.joinList( outputSizePrefix, outputSizeSuffix, ["OfInput"] )
-        outputSizeJoined = tuple( set( [self.lowercase( word ) for word in outputSizeJoined + ( "s", "iS", "oS" ) if len( word ) > 0] ) )
+        outputSizeJoined = tuple( set( [self.lowercase( word ) for word in outputSizeJoined + ( "s", "iS", "oS" ) if word] ) )
         outputSize = checkInputs.checkBooleanKwargs( kwargs, False, *outputSizeJoined )
         
         #If the custom image option should be dynamically disabled or the code stopped
@@ -404,7 +406,7 @@ class ImageStore:
         
         #Cutoff mode help
         cutoffModeHelp = checkInputs.checkBooleanKwargs( kwargs, False, 'cH', 'cMH', 'cHelp', 'cMHelp', 'cutoffHelp', 'cutoffModeHelp' )
-        if cutoffModeHelp == True:
+        if cutoffModeHelp:
             cutoffModeHelp = []
             cutoffModeHelp.append( "Cutoff modes:" )
             cutoffModeHelp.append( "These define if the values should be added or subtracted based on the value of the pixel." )
@@ -422,7 +424,7 @@ class ImageStore:
         validArgs = checkInputs.validKwargs( kwargs, 'r', 'ratio', 'sizeRatio', 'widthRatio', 'heightRatio', 'widthToHeightRatio' )
         ratioWidth = math.log( 1920 ) / math.log( 1920*1080 )
         
-        for i in range( len( validArgs ) ):
+        for i in xrange( len( validArgs ) ):
         
             try:
                 if 0 < float( str( kwargs[validArgs[i]] ) ) < 1:
@@ -439,18 +441,18 @@ class ImageStore:
         usedRenderViewImage = False
         usedRenderView = False
         customImageInputPath = ""
-        if outputSize == False:
+        if not outputSize:
         
             #Check if custom image should be used
             validArgs = checkInputs.validKwargs( kwargs, 'i', 'cI', 'img', 'image', 'URL', 'imgURL', 'imgPath', 'imgLoc', 'imgLocation', 'imageURL', 'imageLoc', 'imagePath', 'imageLocation', 'customImg', 'customURL', 'customImage', 'customImgURL', 'customImageURL', 'customImgPath', 'customImagePath', 'customImgLoc', 'customImageLoc', 'customImgLocation', 'customImageLocation' )
             customImageInput = None
             
             #Force certain custom image
-            if self.forceCustomImages == True:
+            if self.forceCustomImages:
                 validArgs = ["forceCustomImages"]
                 kwargs["forceCustomImages"] = self.useThisCustomImage
             
-            for i in range( len( validArgs ) ):
+            for i in xrange( len( validArgs ) ):
             
                 try:
                     if not kwargs[validArgs[i]]:
@@ -501,10 +503,10 @@ class ImageStore:
                 usedFilenameAsCustom = True
                 
             
-            if ( len( validArgs ) > 0 or usedFilenameAsCustom ) and not customImageInput:
+            if ( validArgs or usedFilenameAsCustom ) and not customImageInput:
                 self.printCurrentProgress( "Error: Custom image could not be read. Output image will be saved without it." )
             
-            if customImageInput == None:
+            if not customImageInput:
                 useCustomImageMethod = False
             else:
                 useCustomImageMethod = True
@@ -516,7 +518,7 @@ class ImageStore:
                 #Cutoff mode prefix
                 validArgs = checkInputs.validKwargs( kwargs, 'cMP', 'cutoffModePrefix', 'cutoffModeName' )
                 cutoffModePrefix = "m"
-                for i in range( len( validArgs ) ):
+                for i in xrange( len( validArgs ) ):
                     try:
                         cutoffModePrefix = str( kwargs[validArgs[i]] )
                         break
@@ -527,7 +529,7 @@ class ImageStore:
                 validArgs = checkInputs.validKwargs( kwargs, 'cM', 'mode', 'cutoff', 'cutoffMode', 'cutoffModes' )
                 customCutoffMode = None
                 validCustomCutoffModes = []
-                for i in range( len( validArgs ) ):
+                for i in xrange( len( validArgs ) ):
                     try:
                         if "," in str( kwargs[validArgs[i]] ) or type( kwargs[validArgs[i]] ) == tuple:
                         
@@ -540,7 +542,7 @@ class ImageStore:
                                 customModeList = kwargs[validArgs[i]].replace( "(", "" ).replace( ")", "" ).split( "," )
                                        
                             #Build list of all values
-                            for j in range( len( customModeList ) ):
+                            for j in xrange( len( customModeList ) ):
                                 try:
                                     customCutoffMode = int( customModeList[j] )
                                     if 0 < customCutoffMode < self.maxCutoffModes+1:
@@ -548,7 +550,7 @@ class ImageStore:
                                 except:
                                     customCutoffMode = None
                                     
-                            if len( validCustomCutoffModes ) > 0:
+                            if validCustomCutoffModes:
                                 break
                             
                         else:
@@ -562,33 +564,33 @@ class ImageStore:
                         customCutoffMode = None
                 
                 #Run code on final cutoff number
-                if len( validCustomCutoffModes ) > 0:
+                if validCustomCutoffModes:
                     customCutoffMode = validCustomCutoffModes[-1]
                 
                 #If image should be output with all cutoff modes
                 allCutoffModes = checkInputs.checkBooleanKwargs( kwargs, False, 'a', 'all', 'aCM', 'allCutoff', 'allCutoffs', 'allModes', 'allCutoffMode', 'allCutoffModes' )
                 
                 #Automatically set custom cutoff modes to all and disable reverting to the default method if image can't hold data
-                if allCutoffModes == True:
-                    validCustomCutoffModes = list( range( self.maxCutoffModes+1 ) )
+                if allCutoffModes:
+                    validCustomCutoffModes = range( self.maxCutoffModes+1 )
                     revertToDefault = False
                 
                 
                 #Avoid running code again if it's already recursive
                 usingCustomModesAlready = checkInputs.checkBooleanKwargs( kwargs, False, 'usingCustomModesAlready' )
-                if usingCustomModesAlready == False:
+                if not usingCustomModesAlready:
                 
                     validCustomCutoffModes.sort()
                     kwargs["usingCustomModesAlready"] = True
                     
                     #Run code again for each cutoff mode
-                    for i in range( len( validCustomCutoffModes )-1 ):
+                    for i in xrange( len( validCustomCutoffModes )-1 ):
                     
                         kwargs["useThisInstead"] = validCustomCutoffModes[i]
                         
                         newImageName = "{0}.{1}{2}.png".format( self.imageName.replace( ".png", "" ), cutoffModePrefix, validCustomCutoffModes[i] )
                         otherURLS = ImageStore( newImageName, **self.kwargs ).write( input, **kwargs )
-                        if otherURLS != None:
+                        if otherURLS:
                             allOutputs += otherURLS
                     
                     if len( validCustomCutoffModes ) > 1:
@@ -603,26 +605,26 @@ class ImageStore:
             #Test custom image to see if it exists, return True or False
             validArgs = checkInputs.validKwargs( kwargs, 't', 'tI', 'tCI', 'testImage', 'testURL', 'testImageURL', 'testImageLocation', 'testCustomImage', 'testCustomImageURL', 'testCustomImageLocation' )
             canReadCustomImage = False
-            for i in range( len( validArgs ) ):
+            for i in xrange( len( validArgs ) ):
             
                 try:
-                    if kwargs[validArgs[i]] == True:
-                        if customImageInput == None:
+                    if kwargs[validArgs[i]]:
+                        if not customImageInput:
                             return False
                         else:
                             return True
                             
                     canReadCustomImage = self.readImage( kwargs[validArgs[i]] )
-                    if canReadCustomImage != None:
+                    if canReadCustomImage:
                         return True
                         
                 except:
                     canReadCustomImage = False
                     
-            if len( validArgs ) > 0 and canReadCustomImage == False:
+            if validArgs and not canReadCustomImage:
                 return False
             
-            if useCustomImageMethod == True:
+            if useCustomImageMethod:
                 #Find md5 of image
                 imageHash = md5.new()
                 try:
@@ -637,7 +639,7 @@ class ImageStore:
                 storedImageURL = ""
                 
                 #This part allows you to skip iterating through every single pixel each time the code is run
-                if self.writeToINI == True:
+                if self.writeToINI:
                     
                     cachePath = self.cache( returnPath = True )
                 
@@ -674,7 +676,7 @@ class ImageStore:
                     storedImage = self.readImage( storedImageURL )
                 
                 
-                if successfulRead == True and storedImage != None:
+                if successfulRead and storedImage:
                     
                     customImageInputPath = storedImageURL
                     customImageInput = storedImage
@@ -682,13 +684,13 @@ class ImageStore:
                 else:
                     #Upload custom image and switch path to URL
                     uploadCustomImage = checkInputs.checkBooleanKwargs( kwargs, True, 'uI', 'uC', 'uO', 'uCI', 'uploadCustom', 'uploadOriginal', 'uploadCustomImage', 'uploadOriginalImage', 'uploadCustomURL', 'uploadOriginalURL' )
-                    if self.forceUpload == True:
+                    if self.forceUpload:
                         uploadCustomImage = self.shouldUpload
-                    if uploadCustomImage == True and customImageInput != None and overrideUpload != True:
+                    if uploadCustomImage and customImageInput and not overrideUpload:
                         
                         #If it should upload any non Imgur URL to Imgur
                         originalImageProtocols = self.protocols
-                        if uploadURLsToImgur == True:
+                        if uploadURLsToImgur:
                             originalImageProtocols = [str( value ) + "i.imgur" for value in self.protocols]
                         
                         if not any( value in customImageInputPath for value in originalImageProtocols ):
@@ -697,12 +699,11 @@ class ImageStore:
                             
                             uploadedImageURL = self.uploadImage( customImageInputPath, ignoreSize = True )
                             
-                            if uploadedImageURL != None:
+                            if uploadedImageURL:
                                 self.printCurrentProgress( "Link to original image is {0}.".format( uploadedImageURL ) )
                                 self.stats( uploadedImageURL, False, imageMD5 )
                                     
-                                if self.writeToINI == False:
-                                
+                                if not self.writeToINI:
                                     self.printCurrentProgress( "Set this link as the custom image input to avoid re-uploading the same image each time." )
                                 
                                 customImageInputPath = str( uploadedImageURL )
@@ -730,7 +731,7 @@ class ImageStore:
         if ( customImageExtension in formatList.keys() ) and customImageExtension not in ignoreFormats:
             
             try:
-                if mayaEnvironment == True:
+                if mayaEnvironment:
                     imageType = renderViewFormat[py.getAttr( "defaultRenderGlobals.imageFormat" )][1]
                 else:
                     imageType = formatList[customImageExtension]
@@ -745,43 +746,42 @@ class ImageStore:
                 
                 self.printCurrentProgress( "Reason: {0} files not supported.".format( imageType ) )
             
-            if mayaEnvironment == True and usedRenderView == True:
+            if mayaEnvironment and usedRenderView:
                 self.printCurrentProgress( "Use 'ImageStore().renderView( <format> )' to change the render image format." )
             
             customImageInput = None
             customImageInputPath = ""
             useCustomImageMethod = False
         
-        if input and returnCustomImageInfo == False:
+        if input and not returnCustomImageInfo:
             self.printCurrentProgress( "Encoding input data...", True, self.writeProgress["CalculatingInputSize"] )
             
         #Print how large the input data is
-        if not input and returnCustomImageInfo == False:
+        if not input and not returnCustomImageInfo:
             self.printCurrentProgress( "Error: Input data is required" )
             return None
         
-        elif returnCustomImageInfo == False:
+        elif not returnCustomImageInfo:
         
-            
             inputData = self.encodeData( input, binary = useCustomImageMethod )
             lengthOfInputData = len( inputData )
             
-            if returnCustomImageInfo == False:
+            if not returnCustomImageInfo:
                 self.printCurrentProgress( "Input data is {0} bytes ({1}kb)". format( lengthOfInputData+3, ( lengthOfInputData+3 )/1024 ), True, self.writeProgress["InputSizeIs"] )
             
             #Return the normal size of input data
-            if outputSize == True:
+            if outputSize:
                 return lengthOfInputData+3
         
         #It shouldn't hit this part
-        elif outputSize == True:
+        elif outputSize:
             print "Error: Unable to output the size of input"
             return None
         
         rawData = []
-        if useCustomImageMethod == True:
+        if useCustomImageMethod:
             
-            if returnCustomImageInfo == False:
+            if not returnCustomImageInfo:
                 self.printCurrentProgress( "Checking image has enough pixels to store the input data.", True, self.writeProgress["CheckingImage"] )
             
             bitsPerPixel = 6
@@ -789,7 +789,7 @@ class ImageStore:
             #Get correct range
             cutoffModeAmount = {}
             colourRange = {}
-            cutoffModes = range( self.maxCutoffModes+1 )
+            cutoffModes = xrange( self.maxCutoffModes+1 )
             invalidCutoffMode = len( cutoffModes )
             
             #Set up valid pixels dictionary
@@ -800,7 +800,7 @@ class ImageStore:
                 validPixels[i] = {}
             
             #Read valid pixels dictionary from cache
-            if successfulRead == True and ( 0 <= storedCutoffMode <= self.maxCutoffModes ):
+            if successfulRead and ( 0 <= storedCutoffMode <= self.maxCutoffModes ):
                 validPixels = storedValidPixels
                 bestCutoffMode = storedCutoffMode
             else:
@@ -808,10 +808,10 @@ class ImageStore:
                 storedCutoffMode = invalidCutoffMode
                 
             #Use custom cutoff mode
-            if customCutoffMode != None:
+            if customCutoffMode:
                 storedCutoffMode = customCutoffMode
                 
-            if successfulRead == False or len( validPixels[storedCutoffMode] ) == 0 or bestCutoffMode == None:
+            if not successfulRead or not validPixels[storedCutoffMode] or not bestCutoffMode:
 
                 #Calculate max data that can be stored
                 if storedCutoffMode == invalidCutoffMode:
@@ -822,12 +822,14 @@ class ImageStore:
                 imageSize = float( imageDimensions[0]*imageDimensions[1] )
                 pixelCount = 0
                 
+                #Set up percentage output
                 nextTime = time()+self.outputProgressTime
                 minPercent = self.writeProgress["CheckingImage"]
                 maxPercent = self.writeProgress["CalculatingCutoffMode"]
-                if returnCustomImageInfo == True:
+                if returnCustomImageInfo:
                     minPercent = 0
                     maxPercent = 65
+                    
                 for pixels in customImageInput.getdata():
                     
                     #Output progress
@@ -837,11 +839,11 @@ class ImageStore:
                             percentCompleted = round( 100 * totalPixelCount / imageSize, 1 )
                             self.printCurrentProgress( " {0}% completed".format( percentCompleted ), False, int( minPercent+( maxPercent - minPercent )/100.0*percentCompleted ) )
                 
-                        for rgb in range( 3 ):
+                        for rgb in xrange( 3 ):
                             rawData.append( pixels[rgb] )
                             if bestCutoffMode == None:
                                 #Count all valid values to find best cutoff mode
-                                if totalPixelCount > 0:
+                                if totalPixelCount:
                                     for i in cutoffModes:
                                         if pixels[rgb] in colourRange[i][0] or pixels[rgb] in colourRange[i][1]:
                                             cutoffModeAmount[i] += 1
@@ -849,7 +851,7 @@ class ImageStore:
                     totalPixelCount += 1
                   
                 #Select best cutoff mode
-                if bestCutoffMode == None:
+                if not bestCutoffMode:
                     bestCutoffMode = max( cutoffModeAmount.iteritems(), key=operator.itemgetter( 1 ) )[0]
                     cutoffMode = bestCutoffMode
                 else:
@@ -871,13 +873,14 @@ class ImageStore:
                 if returnCustomImageInfo:
                     minPercent = 65
                     maxPercent = 100
-                for i in range( 8 ):
+                    
+                for i in xrange( 8 ):
                                             
                     bitsPerPixel = i+1
                     validPixels[cutoffMode][bitsPerPixel] = 0
                     colourIncreaseRange, colourReduceRange = self.validRange( cutoffMode, bitsPerPixel )
                     
-                    for j in range( len( rawData ) ):
+                    for j in xrange( len( rawData ) ):
                     
                         if rawData[j] in colourIncreaseRange or rawData[j] in colourReduceRange:
                             validPixels[cutoffMode][bitsPerPixel] += 1
@@ -896,12 +899,12 @@ class ImageStore:
                     
                 #Store custom image information
                 for pixels in customImageInput.getdata():
-                    for rgb in range( 3 ):
+                    for rgb in xrange( 3 ):
                         rawData.append( pixels[rgb] )
                         
                 #Get stored values
                 cutoffMode = storedCutoffMode
-                if customCutoffMode != None:
+                if customCutoffMode:
                     cutoffMode = customCutoffMode
                 validPixels = storedValidPixels
                 
@@ -911,7 +914,7 @@ class ImageStore:
             bitsPerPixelMax = validPixelsTotal.index( max( validPixelsTotal ) )+1
             
             #Write to ini file
-            if self.writeToINI == True:
+            if self.writeToINI:
                 textFileData[imageMD5] = [bestCutoffMode, validPixels, customImageInputPath]
                 textFile.write( self.encodeData( textFileData, encode = True ) )
                 textFile.close()
@@ -923,7 +926,7 @@ class ImageStore:
                 imageCanStorePercent = 100
             self.printCurrentProgress( "Image can store up to around {0} bytes ({1}kb)".format( imageBytes, imageBytes/1024 ), True, imageCanStorePercent )
             
-            if returnCustomImageInfo == False:
+            if not returnCustomImageInfo:
                 inputBytes = ( len( inputData )*8 )/bitsPerPixelMax+3
                 outputText = "Input data at this level is {0} bytes ({1}kb)".format( inputBytes, inputBytes/1024 )
             
@@ -939,7 +942,7 @@ class ImageStore:
                 self.printCurrentProgress( outputText, True, self.writeProgress["InputAtMax"] )
             
             #Stop here if image information is wanted
-            if returnCustomImageInfo == True:
+            if returnCustomImageInfo:
                 return imageBytes
                 
             #Calculate minimum bits per pixel to use
@@ -956,7 +959,7 @@ class ImageStore:
                     outputText = "Error: Image not big enough to store data."
                         
                     #Stop code here if reverting to default isn't an option
-                    if revertToDefault == False:
+                    if not revertToDefault:
                         self.printCurrentProgress( outputText, True, maxPercent )
                         return None
                     else:
@@ -989,7 +992,7 @@ class ImageStore:
                 #Draw image
                 width, height = customImageInput.size
         
-        if useCustomImageMethod == False:
+        if not useCustomImageMethod:
             
             #Set image info
             minimumWidth = 3
@@ -1016,6 +1019,7 @@ class ImageStore:
                         width += 1
                     else:
                         height += 1
+                        
             bitsPerPixel = 8
             cutoffMode = 9
     
@@ -1027,9 +1031,9 @@ class ImageStore:
     
         #Set range of colours for random filling
         numbersToAddIncrement = 0
-        if padWithRandomData == True:
+        if padWithRandomData:
         
-            if useCustomImageMethod == True:
+            if useCustomImageMethod:
                 maxImageAddition = pow( 2, bitsPerPixel )+bitsPerPixel-8
                 minImageAddition = 0
                 
@@ -1050,8 +1054,8 @@ class ImageStore:
         nextTime = time()+self.outputProgressTime
         minPercent = self.writeProgress["SetDimensions"]
         maxPercent = self.writeProgress["CalculatingImage"]
-        for y in range( height ):
-            for x in range( width ):
+        for y in xrange( height ):
+            for x in xrange( width ):
                 
                 isDataFromInput = True
                 currentProgress = 3*( y*width+x )
@@ -1065,39 +1069,39 @@ class ImageStore:
 
                 
                 #Assign information to first pixel
-                if x == 0 and y == 0:
+                if not x and not y:
                     inputInfo = int( str( bitsPerPixel ) + str( cutoffMode ) )
                     dataRGB = [inputInfo, self.firstPixelPadding[0], self.firstPixelPadding[1]]
-                    if debugData == True:
+                    if debugData:
                         dataRGB = [99, self.firstPixelPadding[0], self.firstPixelPadding[1]]
                         imageData[x,y] = tuple( dataRGB )
                         continue
                 
                 #If an image should be made with the default method
-                elif useCustomImageMethod == False:
+                elif not useCustomImageMethod:
                         
                     dataRGB = {} 
                     try:
-                        for i in range( 3 ):
+                        for i in xrange( 3 ):
                             dataRGB[i] = inputData[numbersToAddIncrement]
                             numbersToAddIncrement += 1
                     except:
                     
-                        if isDataFromInput == True:
+                        if isDataFromInput:
                             isDataFromInput = False
                         
                         #Add random data
-                        for i in range( 3 ):
+                        for i in xrange( 3 ):
                             dataRGB[i] = randint( minImageAddition, maxImageAddition )
                     
-                    dataRGB = [ number[1] for number in dataRGB.items()]
+                    dataRGB = [number[1] for number in dataRGB.items()]
                      
                 #If data should be written over a custom image
                 else:
                 
                     if numbersToAddIncrement < len( numbersToAdd )-1:
                         dataRGB = {}
-                        for i in range( 3 ):
+                        for i in xrange( 3 ):
                         
                             try:
                                 if rawData[currentProgress+i] in colourIncreaseRange:
@@ -1119,12 +1123,12 @@ class ImageStore:
                         
                     else:
                     
-                        if isDataFromInput == True:
+                        if isDataFromInput:
                             isDataFromInput = False
                         
                         #Pad with random values so it's not such a clear line in the image
                         dataRGB = {}
-                        for i in range( 3 ):
+                        for i in xrange( 3 ):
                         
                             if rawData[currentProgress+i] in colourIncreaseRange:
                                 dataRGB[i] = rawData[currentProgress+i] + randint( minImageAddition, maxImageAddition )
@@ -1135,9 +1139,9 @@ class ImageStore:
                             else:
                                 dataRGB[i] = rawData[currentProgress+i]
                                 
-                        dataRGB = [ dataRGB[0], dataRGB[1], dataRGB[2] ]
+                        dataRGB = [dataRGB[0], dataRGB[1], dataRGB[2]]
                 
-                if debugData == True and isDataFromInput == True:
+                if debugData and isDataFromInput:
                     dataRGB = [0,0,0]
                     
                 imageData[x,y] = tuple( dataRGB )
@@ -1194,7 +1198,7 @@ class ImageStore:
         
         
         #Make sure image exists first
-        if self.imageName != None:
+        if self.imageName:
             
             #Find md5 of image
             imageHash = md5.new()
@@ -1219,7 +1223,7 @@ class ImageStore:
             infoText.append( "Visit {0} to get a working version of the code.".format( self.website ) )
             
             #Write to zip file
-            if disableInfo == False:
+            if not disableInfo:
                 ImageStoreZip.write( "".join( infoText ), "information.txt", reset = True )
                 ImageStoreZip.write( str( getpass.getuser() ) + "@" + str( time() ), "creationtime" )
                 ImageStoreZip.write( customImageInputPath, "url" )
@@ -1229,12 +1233,12 @@ class ImageStore:
             
             zipSuccess = ImageStoreZip.combine( image = self.imageName )
             
-            if zipSuccess == False:
+            if not zipSuccess:
                 self.printCurrentProgress( "Error: Unable to write extra information." )
             
             #Upload image
             uploadedImageURL = None
-            if upload == True and overrideUpload != True:
+            if upload and not overrideUpload:
                 self.printCurrentProgress( "Uploading image..." )
                     
                 uploadedImageURL = self.uploadImage( self.imageName, openImage )
@@ -1247,7 +1251,7 @@ class ImageStore:
             
             #Check the output
             self.validateWrite = True
-            if validateOutput == True:
+            if validateOutput:
                 
                 self.printCurrentProgress( "Validating saved image...", True, self.writeProgress["Validate"] )
             
@@ -1271,28 +1275,28 @@ class ImageStore:
             
             
             #Write to render view window for Maya
-            if mayaEnvironment == True:
-                if writeToRenderView == True:
+            if mayaEnvironment:
+                if writeToRenderView:
                     try:
                         py.renderWindowEditor( 'renderView', edit = True, loadImage = self.imageName )
                     except:
                         self.printCurrentProgress( "Error: Failed to write image into the renderView window." )
             
             #Remove the image
-            if deleteImage == True:
+            if deleteImage:
                 self.printCurrentProgress( "Deleting image..." )
                 try:
                     os.remove( self.imageName )
                     outputList.pop( 0 )
                 except:
                     pass
-                if len( outputList ) == 0:
+                if not outputList :
                     return None
             
             self.stats( uploadedImageURL, lengthOfInputData+3, imageMD5 )
             
             returningCustomURL = False
-            if returnCustomImageURL == True and any( value in customImageInputPath for value in self.protocols ):
+            if returnCustomImageURL and any( value in customImageInputPath for value in self.protocols ):
                 outputList.append( customImageInputPath )
                 returningCustomURL = True
             
@@ -1304,7 +1308,7 @@ class ImageStore:
         else:
             returnValue = None
         
-        if mayaEnvironment == True:
+        if mayaEnvironment:
             self.printCurrentProgress( "Done." )
             if self.callbackWrite:
                 self.callbackWrite( returnValue, returningCustomURL )
@@ -1320,20 +1324,20 @@ class ImageStore:
         #If it should just debug the data
         validArgs = checkInputs.validKwargs( kwargs, 'debug', 'debugData', 'debugResult', 'debugOutput' )
         debugData = False
-        for i in range( len( validArgs ) ):
+        for i in xrange( len( validArgs ) ):
             try:
-                if kwargs[validArgs[i]] == True:
+                if kwargs[validArgs[i]]:
                     debugData = debugDataDefaultAmount
                     break
                 elif 0 < int( kwargs[validArgs[i]] ):
                     debugData = int( kwargs[validArgs[i]] )
             except:
                 debugData = False
-        if debugData == False and self.debugging == True:
+        if not debugData and self.debugging:
             debugData = debugDataDefaultAmount
 
         #Read renderView window in Maya      
-        if mayaEnvironment == True:
+        if mayaEnvironment:
             if self.imageName in self.renderViewCheck:
                 self.renderView( True )
                 try:
@@ -1352,18 +1356,19 @@ class ImageStore:
         self.printCurrentProgress( "Reading image...", True, self.readProgress["ReadingImage"] )
         useArgsForImageRead = True
         try:
-            if len( args ) > 0 and useArgsForImageRead == True:
+            if args and useArgsForImageRead:
                 imageInput = self.readImage( args[0] )
                 self.imageName = args[0]
             else:
                 imageInput = None
-            if imageInput == None:
+                
+            if not imageInput:
                 raise ImageStoreError()
                 
         except:
             imageInput = self.readImage( self.imageName )
             
-        if imageInput == None:
+        if not imageInput:
             self.printCurrentProgress( "Error: Unable to read image." )
             return None
             
@@ -1373,24 +1378,24 @@ class ImageStore:
         try:
             self.printCurrentProgress( "Reading files in image...", True, self.readProgress["ReadingFiles"] )
             originalVersionNumber, originalCreationTime, originalCreationName, customImageURL, fileList = ImageStoreZip.read( imageLocation = self.imageName )
-            if debugData != False:
+            if debugData:
                 self.printCurrentProgress( "Files stored in image: {0}".format( ", ".join( fileList ) ), True, self.readProgress["FilesStored"] )
         
         except:
             outputInfo = False
             customImageURL = ""
             
-        if outputInfo == True:
-            if originalVersionNumber != None:
+        if outputInfo:
+            if originalVersionNumber:
                 self.printCurrentProgress( "Version number: {0}".format( originalVersionNumber ), True, self.readProgress["FilesStored"] )
-            if originalCreationTime != None:
-                self.printCurrentProgress( "Date created: {0}".format( self.dateFormat( originalCreationTime ) ), True, readProgress["FilesStored"] )
+            if originalCreationTime:
+                self.printCurrentProgress( "Date created: {0}".format( self.dateFormat( originalCreationTime ) ), True, self.readProgress["FilesStored"] )
         
         self.printCurrentProgress( "Storing the pixel data...", True )
         #Store pixel info
         rawData = []
         for pixels in imageInput.getdata():
-            for rgb in range( 3 ):
+            for rgb in xrange( 3 ):
                 rawData.append( pixels[rgb] )
         
         #Get important image info
@@ -1403,7 +1408,7 @@ class ImageStore:
             self.printCurrentProgress( "Error: Invalid image." )
             return None
         
-        if debugData != False:
+        if debugData:
             self.printCurrentProgress( "Bits per pixel: {0}".format( bitsPerPixel ), True, self.readProgress["FirstPixel"] )
             self.printCurrentProgress( "Cutoff mode: {0}".format( cutoffMode ), True, self.readProgress["FirstPixel"] )
         
@@ -1428,36 +1433,36 @@ class ImageStore:
             useCustomImageMethod = True
             
         usedDifferentOriginalImage = False
-        if useCustomImageMethod == True:
+        if useCustomImageMethod:
         
             
             #Use other custom image
             validArgs = checkInputs.validKwargs( kwargs, 'i', 'cI', 'img', 'image', 'URL', 'imgURL', 'imgPath', 'imgLoc', 'imgLocation', 'imageURL', 'imageLoc', 'imagePath', 'imageLocation', 'customImg', 'customImage', 'customImgURL', 'customImageURL', 'customImgPath', 'customImagePath', 'customImgLoc', 'customImageLoc', 'customImgLocation', 'customImageLocation' )
             originalImage = None
-            for i in range( len( validArgs ) ):
+            for i in xrange( len( validArgs ) ):
                 try:
                     originalImage = self.readImage( kwargs[validArgs[i]] )
                 except:
                     originalImage = None
                         
-            if len( validArgs ) > 0 and originalImage == None:
+            if validArgs and not originalImage:
             
                 outputText = "Error: Could not read the custom input image."
-                if len( customImageURL ) > 0:
+                if customImageURL:
                     outputText.replace( ".", ", reverting to the stored URL." )
                 self.printCurrentProgress( outputText )
                     
                 originalImage = self.readImage( customImageURL )
                 
-            elif originalImage == None:
+            elif not originalImage:
                 originalImage = self.readImage( customImageURL )
                 
             else:
                 usedDifferentOriginalImage = True
             
             #If both attempts haven't worked
-            if originalImage == None:
-                if len( customImageURL ) > 0:
+            if not originalImage:
+                if customImageURL:
                     self.printCurrentProgress( "Error: Invalid custom image." )
                 else:
                     self.printCurrentProgress( "Error: Something has gone wrong." )
@@ -1468,7 +1473,7 @@ class ImageStore:
             #Store original pixel info
             originalImageData = []
             for pixels in originalImage.getdata():
-                for rgb in range( 3 ):
+                for rgb in xrange( 3 ):
                     originalImageData.append( pixels[rgb] )
                     
             #For cutoff mode, 0 is move colours down towards black, 1 is move towards middle, 2 is move towards white
@@ -1481,8 +1486,8 @@ class ImageStore:
             nextTime = time()+self.outputProgressTime
             totalPixels = len( originalImageData )
             minPercent = self.readProgress["StoringCustomPixelInfo"]
-            maxPercent = self.readProgress["ReadingData"]
-            for i in range( 3, totalPixels ):
+            maxPercent = self.readProgress["ConvertingData"]
+            for i in xrange( 3, totalPixels ):
                 
                 #Output progress
                 if i % self.outputProgressIterations == 0:
@@ -1491,21 +1496,21 @@ class ImageStore:
                         percentCompleted = round( 100 * i / totalPixels, 1 )
                         self.printCurrentProgress( " {0}% completed".format( percentCompleted ), False, int( minPercent+(maxPercent - minPercent)/100.0*percentCompleted ) )
                         
-            
                 if originalImageData[i] in colourIncreaseRange:
                     comparisonData.append( rawData[i] - originalImageData[i] )
                     
                 elif originalImageData[i] in colourReduceRange:
                     comparisonData.append( originalImageData[i] - rawData[i] )
                     
+            self.printCurrentProgress( "Converting data to readable format...", True, self.readProgress["ConvertingData"] )
             bitData = "".join( [ format( x, "b" ).zfill( bitsPerColour ) for x in comparisonData ] )
             byteData = re.findall( r".{1,8}", bitData )
             
-            for i in range( len( byteData ) ):
+            for i in xrange( len( byteData ) ):
                 if "-" in byteData[i]:
                     byteData[i] = "00000000"
                     
-            numberData = [ int( number, 2 ) for number in byteData ]
+            numberData = [int( number, 2 ) for number in byteData]
             
         else:
             numberData = rawData[3:]
@@ -1514,7 +1519,7 @@ class ImageStore:
         self.printCurrentProgress( "Removing excess data from end of file...", True, self.readProgress["ReadingData"] )
         try:
         
-            for i in range( len( numberData ) ):
+            for i in xrange( len( numberData ) ):
                 j = 0
                 
                 while numberData[i+j] == self.imageDataPadding[j]:
@@ -1537,17 +1542,17 @@ class ImageStore:
             
         except:
         
-            if usedDifferentOriginalImage == True:
+            if usedDifferentOriginalImage:
                 self.printCurrentProgress( "Failed to decode data, the custom original image specified may not be the original one used." )
                 
-                if len( customImageURL ) > 0:
+                if customImageURL:
                     self.printCurrentProgress( "Failed to decode data, however here is a URL to the correct image contained within the file." )
                     self.printCurrentProgress( "If you are using the original image stored on your computer, it may have resized after being uploaded to Imgur." )
                 
                 else:
                     self.printCurrentProgress( "No URL was found stored in the image, you may have linked to the wrong image." )
             
-            elif len( customImageURL ) > 0:
+            elif customImageURL:
                 self.printCurrentProgress( "Failed to decode data from the stored URL ({0}), check the image still exists.".format( customImageURL ) )
             
             else:
@@ -1555,7 +1560,7 @@ class ImageStore:
                     
             decodedData = None
         
-        if debugData != False and decodedData != None:
+        if debugData and decodedData:
             self.printCurrentProgress( "Length of stored data: {0}".format( len( decodedData ) ) )
             self.printCurrentProgress( "Type of data: {0}".format( str( type( decodedData ) ).replace( "<type '", "" ).replace( "'>", "" ) ) )
             self.printCurrentProgress( "Writing data to user interface...", True )
@@ -1566,7 +1571,7 @@ class ImageStore:
                 
             self.printCurrentProgress( "Successfully decoded the image.", True, self.readProgress["Decoding"] )
             
-        if mayaEnvironment == True:
+        if mayaEnvironment:
             if self.callbackRead:
                 self.callbackRead( decodedData )
             
@@ -1575,7 +1580,7 @@ class ImageStore:
     def decodeData( self, numberData, **kwargs ):
         
         #Only decode the data without converting numbers into characters
-        if checkInputs.checkBooleanKwargs( kwargs, False, 'd', 'decode', 'decodeOnly' ) == True:
+        if checkInputs.checkBooleanKwargs( kwargs, False, 'd', 'decode', 'decodeOnly' ):
             encodedData = numberData
         
         #Convert numbers into characters
@@ -1588,7 +1593,7 @@ class ImageStore:
     def encodeData( self, input, **kwargs ):
         
         encodedData = base64.b64encode( zlib.compress( cPickle.dumps( input ) ) )
-        if checkInputs.checkBooleanKwargs( kwargs, False, 'e', 'encode', 'encodeOnly' ) == True:
+        if checkInputs.checkBooleanKwargs( kwargs, False, 'e', 'encode', 'encodeOnly' ):
             return encodedData
         
         #Format into numbers
@@ -1596,12 +1601,12 @@ class ImageStore:
         pixelData += self.imageDataPadding
         
         #Pad to end with multiple of 3
-        for i in range( 3-len( pixelData )%3 ):
+        for i in xrange( 3-len( pixelData )%3 ):
             pixelData += [randint( 52, 128 )]
         
         #Get binary info
         binary = checkInputs.checkBooleanKwargs( kwargs, False, 'b', 'binary', 'useCustomImageMethod' )
-        if binary == True:
+        if binary:
             pixelData = [ format( number, "b" ).zfill( 8 ) for number in pixelData ]
             
         return pixelData      
@@ -1613,7 +1618,7 @@ class ImageStore:
     
         #Check if md5 value is valid
         if md5.new().hexdigest() == imageMD5:
-            imageMD5 = "".join("0" for x in range( 32 ))
+            imageMD5 = "".join("0" for x in xrange( 32 ))
             return #No point storing it currently, means something has gone wrong or something
             
         #Set user agent and URL
@@ -1622,7 +1627,7 @@ class ImageStore:
         
         #Send a request to the website
         try:
-            if self.debugging != True:
+            if not self.debugging:
                 urllib2.urlopen( urllib2.Request( siteAddress, headers = { 'User-Agent': userAgent } ) )
         except:
             pass
@@ -1638,7 +1643,7 @@ class ImageStore:
         validFormats = dict( [renderViewFormat[int( index )] for index in uploadFormats] )
         allFormats = dict( [value for key, value in renderViewFormat.iteritems() if len( value ) == 2] )
         
-        if self.validPath( imageLocation ) == True and overrideUpload != True:
+        if self.validPath( imageLocation ) and not overrideUpload:
         
             #Check format is valid
             fileExtension = imageLocation.split( "." )[-1].lower()
@@ -1691,7 +1696,7 @@ class ImageStore:
             uploadedImageSize = uploadedImage.size
             
             #Check it's not been converted, not needed if it's acting as the original image
-            if originalImageSize != uploadedImageSize and ignoreSize == False:
+            if originalImageSize != uploadedImageSize and not ignoreSize:
             
                 self.printCurrentProgress( "Error: File is too large for Imgur." )
                 return None
@@ -1699,13 +1704,13 @@ class ImageStore:
             else:
             
                 #Open image in browser
-                if openImage == True:
+                if openImage:
                     webbrowser.open( uploadedImage.link )
                                 
                 #Return the link
                 return uploadedImage.link
 
-            if saved == True:
+            if saved:
             
                 try:
                     os.remove( imageSaveLocation )
@@ -1894,7 +1899,7 @@ class ImageStore:
                 isValid = False
                 
         else:
-            if includeFile == True and "." in path.rsplit( '/', 1 )[1]:
+            if includeFile and "." in path.rsplit( '/', 1 )[1]:
                 path = path.rsplit( '/', 1 )[0]
                 
             isValid = os.path.exists( path )
@@ -1924,8 +1929,8 @@ class ImageStore:
             colourMinReduce = 255
             colourMaxReduce = 254
         
-        colourIncreaseRange = range( colourMinIncrease, colourMaxIncrease+1 )
-        colourReduceRange = range( colourMinReduce, colourMaxReduce+1 )
+        colourIncreaseRange = xrange( colourMinIncrease, colourMaxIncrease+1 )
+        colourReduceRange = xrange( colourMinReduce, colourMaxReduce+1 )
         
         return colourIncreaseRange, colourReduceRange
         
@@ -1956,16 +1961,16 @@ class ImageStore:
         
         #Delete the cache file
         validArgs = checkInputs.validKwargs( kwargs, 'c', 'clear', 'clean', 'clearCache', 'cleanCache', 'delete', 'delCache', 'deleteCache' )
-        for i in range( len( validArgs ) ):
+        for i in xrange( len( validArgs ) ):
             try:
-                if kwargs[validArgs[i]] == True:
+                if kwargs[validArgs[i]]:
                     try:
                         os.remove( cachePath )
                         break
                     except:
                         pass
                 #Only remove individual record instead
-                elif type( kwargs[validArgs[i]] ) == str and outputData != None:
+                elif type( kwargs[validArgs[i]] ) == str and outputData:
                     outputData.pop( kwargs[validArgs[i]], None )
             except:
                 pass
@@ -1974,7 +1979,7 @@ class ImageStore:
         if outputData:
             validArgs = checkInputs.validKwargs( kwargs, 'delValue', 'delKey', 'deleteValue', 'deleteKey', 'clearValue', 'clearKey', 'removeValue', 'removeKey' )
             deleteValue = None
-            for i in range( len( validArgs ) ):
+            for i in xrange( len( validArgs ) ):
                 outputData.pop( kwargs[validArgs[i]], None )
                 
             #Write back to cache
@@ -1987,14 +1992,14 @@ class ImageStore:
             #Return single value
             validArgs = checkInputs.validKwargs( kwargs, 'k', 'v', 'key', 'value' )
             keyValue = None
-            for i in range( len( validArgs ) ):
+            for i in xrange( len( validArgs ) ):
                 try:
                     keyValue = outputData[kwargs[validArgs[i]]]
                     break
                 except:
                     keyValue = None
                     
-            if len( validArgs ) > 0:
+            if validArgs:
                 if keyValue:
                     return self.formatCache( {kwargs[validArgs[i]]: keyValue}, returnRawValues )
                 else:
@@ -2004,9 +2009,9 @@ class ImageStore:
         #If the hash should be calculated
         validArgs = checkInputs.validKwargs( kwargs, 'h', 'hash', 'returnHash', 'calculateHash', 'imageHash', 'MD5', 'imageMD5', 'image' )
         returnHash = None
-        for i in range( len( validArgs ) ):
+        for i in xrange( len( validArgs ) ):
             try:
-                if kwargs[validArgs[i]] == True:
+                if kwargs[validArgs[i]]:
                     returnHash = self.imageName
                     break
                 elif self.readImage( str( kwargs[validArgs[i]] ) ):
@@ -2036,7 +2041,7 @@ class ImageStore:
                 
                 return imageMD5
                 
-        elif len( validArgs ) > 0:
+        elif validArgs:
             return None
         
         if args:
@@ -2055,17 +2060,19 @@ class ImageStore:
 
     def formatCache( self, outputData, returnRawValues = False ):   
     
-        if returnRawValues == True:
+        if returnRawValues:
             return outputData
             
         cacheOutput = []
         for imageHash in outputData.keys():
             cacheOutput.append( "Hash: {0}".format( imageHash ) )
-            if len( outputData[imageHash][2] ) > 0:
+            
+            if outputData[imageHash][2]:
                 cacheOutput.append( "   URL: {0}".format( outputData[imageHash][2] ) )
             cacheOutput.append( "   Best cutoff mode: {0}".format( outputData[imageHash][0] ) )
+            
             for cutoffMode in outputData[imageHash][1].keys():
-                if len( outputData[imageHash][1][cutoffMode] ) > 0:
+                if outputData[imageHash][1][cutoffMode]:
                     cacheOutput.append( "      Cutoff mode {0}:".format( cutoffMode ) )
                     for bitsPerPixel in outputData[imageHash][1][cutoffMode].keys():
                         cacheOutput.append( "         Storage with {0} bits per pixel: {1}".format( bitsPerPixel, outputData[imageHash][1][cutoffMode][bitsPerPixel]*bitsPerPixel ) ) 
@@ -2092,9 +2099,13 @@ class ImageStore:
         except:
             return None
 
-    def lowercase( self, input ):
+    def lowercase( self, input = None ):
         
-        input = str( input )
+        if input != None: #Allows false to be used
+            input = str( input )
+        else:
+            return None
+            
         if len( input ) == 0:
             return input
         elif len( input ) == 1:
@@ -2113,14 +2124,14 @@ class ImageStore:
         #Save file
         if valueType == bool:
         
-            if save == True:
+            if save:
                 try:
                     self.renderViewSaveLocation = py.renderWindowEditor( 'renderView', edit = True, writeImage = self.renderViewSaveLocation )[1]
                 except:
                     pass
                     
             #Delete file
-            elif save == False:
+            else:
                 try:
                     os.remove( self.renderViewSaveLocation )
                 except:
@@ -2129,6 +2140,7 @@ class ImageStore:
                     except:
                         pass
         
+        #Set scene format to index value
         elif valueType == int or ( valueType == str and save.isdigit() ):
             try:
                 if 0 <= int( save ) < 64:
@@ -2139,6 +2151,7 @@ class ImageStore:
             except:
                 self.printCurrentProgress( "Error: Index must be between 0 and 63." )
         
+        #Set scene format to filetype 
         elif valueType == str:
             
             if save.lower() in formatList.keys():
@@ -2170,12 +2183,12 @@ class ImageStoreZip:
         while path[-1] == "/":
             path = path[:-1]
         
-        if ImageStore().validPath( path ) == False:
+        if not ImageStore().validPath( path ):
             return False
             
         else:
             zipLocation = "{0}/{1}".format( path, self.zipName )
-            if resetZip == True:
+            if resetZip:
                 try:
                     os.remove( zipLocation )
                 except:
@@ -2186,8 +2199,7 @@ class ImageStoreZip:
             try:
                 zip.writestr( fileName, input )
             except:
-                if ImageStore.printProgress == True:
-                    print "Error: Failed to write zip file."
+                self.printCurrentProgress( "Error: Failed to write zip file.", True )
             zip.close()
     
     @classmethod
@@ -2197,12 +2209,12 @@ class ImageStoreZip:
         validArgs = checkInputs.validKwargs( kwargs, 'i', 'iL', 'iN', 'image', 'imageLoc', 'imageLocation', 'imageName' )
         imageLocation = None
         
-        for i in range( len( validArgs ) ):
+        for i in xrange( len( validArgs ) ):
         
             try:
                 imageLocation = kwargs[validArgs[i]]
                 
-                if ImageStore().validPath( imageLocation ) == True:
+                if ImageStore().validPath( imageLocation ):
                     break
                 else:
                     raise IOError( "image doesn't exist" )
@@ -2215,19 +2227,19 @@ class ImageStoreZip:
         
             imageLocation = cStringIO.StringIO( urllib2.urlopen( imageLocation ).read() )
             
-            if zipfile.is_zipfile( imageLocation ) == True:
+            if zipfile.is_zipfile( imageLocation ):
                 zip = zipfile.ZipFile( imageLocation )
             else:
                 zip = None
                 
-        elif zipfile.is_zipfile( imageLocation ) == True:
+        elif zipfile.is_zipfile( imageLocation ):
             zip = zipfile.ZipFile( imageLocation )
             
         else:
             zip = None
             
         #Read zip data
-        if zip != None:
+        if zip:
             nameList = zip.namelist()
                         
             if 'creationtime' in nameList:
@@ -2271,18 +2283,18 @@ class ImageStoreZip:
         #Get location to read zip file
         path = "{0}/{1}".format( ImageStore.defaultImageDirectory, self.zipName )
             
-        if ImageStore().validPath( path ) == False:
+        if not ImageStore().validPath( path ):
             return False
         
         #Get image location
         validArgs = checkInputs.validKwargs( kwargs, 'i', 'iL', 'iN', 'image', 'imageLoc', 'imageLocation', 'imageName' )
         imageLocation = None
         
-        for i in range( len( validArgs ) ):
+        for i in xrange( len( validArgs ) ):
         
             try:
                 imageLocation = kwargs[validArgs[i]]
-                if ImageStore().validPath( imageLocation ) == True:
+                if ImageStore().validPath( imageLocation ):
                     break
                 else:
                     imageLocation = None
@@ -2294,11 +2306,11 @@ class ImageStoreZip:
         #Get zip location        
         validArgs = checkInputs.validKwargs( kwargs, 'z', 'zL', 'zN', 'zip', 'zipLoc', 'zipLocation', 'zipName' )
         zipLocation = path
-        for i in range( len( validArgs ) ):
+        for i in xrange( len( validArgs ) ):
         
             try:
                 zipLocation = kwargs[validArgs[i]]
-                if ImageStore().validPath( zipLocation ) == True:
+                if ImageStore().validPath( zipLocation ):
                     break
                 else:
                     zipLocation = path
@@ -2307,7 +2319,7 @@ class ImageStoreZip:
             except:
                 zipLocation = path
         
-        if imageLocation != None:
+        if imageLocation:
         
             locationOfImage = imageLocation.replace( "/", "\\\\" )
             locationOfZip = zipLocation.replace( "/", "\\\\" )
@@ -2335,7 +2347,7 @@ class checkInputs:
         for arg in args:
             if " " in str( arg ):
                 splitArg = str( arg ).split( " " )
-                for i in range( len( splitArg ) ):
+                for i in xrange( len( splitArg ) ):
                     joinedArg[i] = self.capitalLetterCombinations( splitArg[i] )
         
         #Put together all combinations
@@ -2355,7 +2367,7 @@ class checkInputs:
             if any( map( str.isupper, arg ) ):
             
                 #If capital in text but not first letter
-                if map( str.isupper, arg[0] )[0] == False:
+                if not map( str.isupper, arg[0] )[0]:
                     returnList.append( ''.join( word[0].upper() + word[1:] for word in arg.split() ) )
                     returnList.append( arg.capitalize() )
                     
@@ -2378,7 +2390,7 @@ class checkInputs:
     
         valid = []
         
-        for i in range( len( args ) ):
+        for i in xrange( len( args ) ):
             newArgs = checkInputs.capitalLetterCombinations( args[i] )
             
             for value in newArgs:
@@ -2399,7 +2411,7 @@ class checkInputs:
         opposite = not default
         validArgs = []
         
-        for i in range( len( args ) ):
+        for i in xrange( len( args ) ):
             validArgs += checkInputs.validKwargs( kwargs, args[i] )
         
         try:
@@ -2530,9 +2542,10 @@ class MayaUserInterface:
                     self.buttonList["RenderView"] = {}
                     self.renderViewFormats = ["jpg", "png", "bmp"]
                     imageFormatsDict = dict( [[item[0], item[1]] for key, item in ImageStore().imageFormats()[0].iteritems() if len( item ) == 2] )
-                    for i in range( 3 ):
+                    for i in xrange( 3 ):
                         
                         self.buttonList["RenderView"][self.renderViewFormats[i]] = py.button( label = self.renderViewFormats[i].upper(), command = py.Callback( self.changeSceneSettings, self.renderViewFormats[i].lower() ), annotation = "Set the scene to use {0} files".format( imageFormatsDict[self.renderViewFormats[i].lower()] ) )
+                    
                     self.changeSceneSettings()
                     
             py.text( label = "" )
@@ -2651,7 +2664,7 @@ class MayaUserInterface:
                             with py.rowColumnLayout( numberOfColumns = 16, annotation = "Select cutoff modes to use" ):
                                 self.checkBoxList["CutoffMode"] = {}
                                 self.textList["CutoffMode"] = {}
-                                for i in range( 8 ):
+                                for i in xrange( 8 ):
                                     textLabel = "  {0} ".format( i )
                                     if i == 0:
                                         textLabel = textLabel[1:]
@@ -2711,9 +2724,7 @@ class MayaUserInterface:
                                 
                                 
                         py.text( label="", width = self.windowWidth/100*1 )
-                        
-                    #py.text( label = "" )
-                    
+                                            
                     with py.frameLayout( label = "Cache Output", collapsable = True, collapse = True, width = self.windowWidth/100*99 ) as self.frameLayoutList["CacheOutput"]:
                         self.scrollFieldList["CacheOutput"] = py.scrollField( height = 200 )
             
@@ -2844,7 +2855,7 @@ class MayaUserInterface:
         
         self.returnSomeData = None
         returnAllData = py.radioButton( self.radioButtonList["ReturnAll"], query = True, select = True )
-        if returnAllData == False:
+        if not returnAllData:
             self.returnSomeData = py.textField( self.textFieldList["ReturnSome"], query = True, text = True ).replace( ",", "" ).replace( " ", "" )
             if not self.returnSomeData.isdigit():
                 self.returnSomeData = 100000
@@ -2872,8 +2883,13 @@ class MayaUserInterface:
         if not outputData:
             outputData = "Unable to read image"
             self.returnSomeData = len( outputData )
-            
-        py.scrollField( self.scrollFieldList["OutputRead"], edit = True, text = str( outputData )[0:self.returnSomeData] )
+        
+        truncatedData = str( outputData )[0:self.returnSomeData]
+        if len( outputData ) > self.returnSomeData and self.returnSomeData:
+            lineBreaks = 0
+            truncatedData += "... " + "".join( [GlobalValues.newLine for i in xrange( lineBreaks )] ) + "[{0} characters truncated]".format( len( outputData )-self.returnSomeData )
+        
+        py.scrollField( self.scrollFieldList["OutputRead"], edit = True, text = truncatedData )
         py.frameLayout( self.frameLayoutList["OutputRead"], edit = True, collapse = False )
         self.setFinalValues()
         
@@ -2943,16 +2959,16 @@ class MayaUserInterface:
         imageURLs = []
         customURL = []
         if outputLocations:
-            for i in range( len( outputLocations ) ):
+            for i in xrange( len( outputLocations ) ):
                 currentImagePath = outputLocations[i]
                 imagePaths.append( currentImagePath[0] )
                 if len( currentImagePath ) > 1:
-                    if returningCustomURL == True:
+                    if returningCustomURL:
                         customURL.append( currentImagePath[-1] )
                     if len( currentImagePath ) - int( returningCustomURL ) == 2:
                         imageURLs.append( currentImagePath[1] )
                         
-        if len( imagePaths ) == 0:
+        if not imagePaths:
             imagePaths.append( "Image wasn't saved" )
         
         py.scrollField( self.scrollFieldList["OutputPath"], edit = True, text = "<br>".join( imagePaths ) )
@@ -2960,7 +2976,6 @@ class MayaUserInterface:
         py.scrollField( self.scrollFieldList["OutputCustomURL"], edit = True, text = "<br>".join( list( set( customURL ) ) ) )
         py.frameLayout( self.frameLayoutList["OutputWrite"], edit = True, collapse = False )
         self.setFinalValues()
-        
     
     @classmethod
     def calculateSizeOfInput( self ):
@@ -2972,7 +2987,7 @@ class MayaUserInterface:
         else:
             inputSize = 0
         
-        if inputSize > 0:
+        if inputSize:
             content = "Input data is {0} bytes ({1}kb), going up to {2} bytes ({3}kb) when using 1 bit per colour".format( inputSize, int( inputSize )/1024, inputSize*8, int( inputSize*8 )/1024 )
         else:
             content = "Input data is invalid"
@@ -3047,7 +3062,7 @@ class MayaUserInterface:
             imageHash = "Unable to read image"
         else:
             
-            if getContents == True:
+            if getContents:
                 self.updateCacheOutput( ImageStore().cache( key = imageHash ), True )
                 return
             
@@ -3070,11 +3085,11 @@ class MayaUserInterface:
         allNumbers = [int( num ) for num in splitText if num.isdigit()]
         
         #If returning from deselecting the cutoff modes
-        if len( args ) > 0:
+        if args:
             if args[0] == "return":
                 args = tuple( list( args )[1:] )
                 
-                for i in range( 8 ):
+                for i in xrange( 8 ):
                     if i in args:
                         enabled = True
                     else:
@@ -3105,29 +3120,29 @@ class MayaUserInterface:
                 
             py.textField( self.textFieldList["CutoffModes"], edit = True, enable = not enableValue )
             
-            for i in range( 8 ):
+            for i in xrange( 8 ):
                 py.checkBox( self.checkBoxList["CutoffMode"][i], edit = True, editable = not enableValue )
                 py.text( self.textList["CutoffMode"][i], edit = True, enable = not enableValue )
                 
             allNumbers = []
         
         #Add number to list
-        for i in range( len( args ) ):
+        for i in xrange( len( args ) ):
             py.checkBox( self.checkBoxList["CutoffMode"][args[i]], edit = True, value = enableValue )
-            if int( args[i] ) not in allNumbers and enableValue == True:
+            if int( args[i] ) not in allNumbers and enableValue:
                 allNumbers.append( args[i] )
         
         allNumbers = list( set( allNumbers ) )
         allNumbers.sort()
         
-        py.textField( self.textFieldList["CutoffModes"], edit = True, text = ", ".join( [str( num ) for num in allNumbers if num in range( 8 )] ) )
+        py.textField( self.textFieldList["CutoffModes"], edit = True, text = ", ".join( [str( num ) for num in allNumbers if num in xrange( 8 )] ) )
         
         for number in allNumbers:
             if str( number ).isdigit():
-                if number in range( 8 ):
+                if number in xrange( 8 ):
                     py.checkBox( self.checkBoxList["CutoffMode"][number], edit = True, value = True )
         
-        if len( newArgs ) > 0:
+        if newArgs:
             try:
                 self.addNewCutoffMode( *newArgs )
             except:
@@ -3159,13 +3174,13 @@ class MayaUserInterface:
     def validButton( self, buttonName, valid ):
         
         try:
-            if valid == True:
+            if valid:
                 py.button( self.buttonList[buttonName], edit = True, backgroundColor = ( 0, 1, 0 ), label = "Valid" )
                 try:
                     py.text( self.textList[buttonName], edit = True, label = "1" )
                 except:
                     pass
-            elif valid == False:
+            else:
                 py.button( self.buttonList[buttonName], edit = True, backgroundColor = ( 1, 0, 0 ), label = "Invalid" )
                 try:
                     py.text( self.textList[buttonName], edit = True, label = "0" )
@@ -3186,13 +3201,14 @@ class MayaUserInterface:
             radioButtonList[None] = py.radioButton( self.radioButtonList["InputIsText"], query = True, select = True ) 
             radioButtonList["code"] = py.radioButton( self.radioButtonList["InputIsCode"], query = True, select = True )
             radioButtonList["file"] = py.radioButton( self.radioButtonList["InputIsFile"], query = True, select = True )
-            inputType = [key for key, value in radioButtonList.iteritems() if value == True][0]
+            inputType = [key for key, value in radioButtonList.iteritems() if value][0]
         
         if not inputType:
             input = str( input )
         
         #Check if it can be executed as code
         if inputType == "code":
+        
             if not returnOnly:
                 py.radioButton( self.radioButtonList["InputIsCode"], edit = True, select = True )
             try:
@@ -3204,6 +3220,7 @@ class MayaUserInterface:
         
         #Check if it can be read
         if inputType in ["browse", "file"]:
+        
             if inputType == "browse":
                 inputType = self.fileReading( False, False, "textField", "InputData", "ValidateInputFile" )
                 
@@ -3239,15 +3256,19 @@ class MayaUserInterface:
         py.text( self.textList["CustomImagePath"], edit = True, enable = not disabled )
         validateBackgroundColour = py.button( self.buttonList["ValidateCustomImage"], query = True, backgroundColor = True )
         newBackgroundColour = []
-        for i in range( 3 ):
+        
+        for i in xrange( 3 ):
+        
             #Calculate new background color
-            if sum( validateBackgroundColour ) > 0:
-                if disabled == True:
+            if sum( validateBackgroundColour ):
+                if disabled:
                     newBackgroundColour.append( validateBackgroundColour[i]/2 )
                 else:
                     newBackgroundColour.append( validateBackgroundColour[i]*2 )
+                    
             py.button( self.buttonList["RenderView"][self.renderViewFormats[i]], edit = True, enable = not disabled )  
-        if sum( validateBackgroundColour ) > 0:
+        
+        if sum( validateBackgroundColour ):
             py.button( self.buttonList["ValidateCustomImage"], edit = True, backgroundColor = newBackgroundColour )
 
 
@@ -3259,7 +3280,7 @@ class MayaUserInterface:
         imageLocation = ImageStore().getImageLocation( rawImageLocation )
         imageHash = ImageStore( imageLocation ).cache( MD5 = True )
         disableCustomImage = py.checkBox( self.checkBoxList["DisableCustomImage"], query = True, value = True )
-        if disableCustomImage == True:
+        if disableCustomImage:
             imageLocation = None
         
         #Test custom image
@@ -3267,7 +3288,7 @@ class MayaUserInterface:
         
         #Don't automatically say valid if nothing is there and image is written to
         if rawImageLocation or py.button( self.buttonList["ValidateCustomImage"], query = True, label = True ) == "Invalid":
-            if valid == True or py.textField( self.textFieldList["CustomImagePath"], query = True, text = True ) == "":
+            if valid or py.textField( self.textFieldList["CustomImagePath"], query = True, text = True ) == "":
                 self.validButton( "ValidateCustomImage", True )
             else:
                 self.validButton( "ValidateCustomImage", False )
@@ -3303,7 +3324,7 @@ class MayaUserInterface:
         
         lightBackground = 0.3
         darkBackground = 0.2
-        for i in range( 3 ):
+        for i in xrange( 3 ):
             if currentFormat == self.renderViewFormats[i]:
                 py.button( self.buttonList["RenderView"][currentFormat], edit = True, backgroundColor = ( lightBackground, lightBackground, lightBackground ) )
             else:
@@ -3372,7 +3393,7 @@ class MayaUserInterface:
             py.button( self.buttonList["MainWriteImage"], edit = True, enable = False )
         
         if changeButtonColour:
-            if valid == True:
+            if valid:
                 self.validButton( "ValidateMainImage", True )
             else:
                 self.validButton( "ValidateMainImage", False )
@@ -3383,9 +3404,9 @@ class MayaUserInterface:
         
         #Set filter options
         filetypeFilter = "All Files (*.*)"
-        if readImage == True:
+        if readImage:
             filetypeFilter = "PNG Files (*.png)"
-            if save == False:
+            if not save:
                 filetypeFilter = "All Image Files (*.png *.jpg *.bmp *.psd *.jpeg);;PNG Files(*.png);;JPG Files(*.jpg *.jpeg);;BMP Files (*.bmp);;PSD Files (*.psd)"
         
         filePath = py.fileDialog2( fileFilter = filetypeFilter, fileMode = not save )
@@ -3412,6 +3433,6 @@ if mayaEnvironment:
     UI = MayaUserInterface.display
     
 if __name__ == '__main__':
-    if mayaEnvironment == True:
+    if mayaEnvironment:
         UI()
 
