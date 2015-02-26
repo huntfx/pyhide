@@ -1,7 +1,7 @@
 '''
 Author: Peter Hunt
 Website: peterhuntvfx.co.uk
-Version: 3.2.1
+Version: 3.2.2
 '''
 #You can edit these values, but they lack error checking so be careful
 def defaults():
@@ -50,11 +50,10 @@ try:
     from PIL import Image
 except:
     raise ImportError( "Python Imaging Library module was not found" )
-from random import randint
 from subprocess import call
 from time import time, sleep
 from datetime import datetime
-import cPickle, base64, urllib2, cStringIO, os, webbrowser, zipfile, getpass, zlib, operator, re, math, md5, itertools, inspect
+import cPickle, base64, urllib2, cStringIO, os, webbrowser, zipfile, getpass, zlib, operator, re, math, md5, itertools, inspect, random
 
 #Disable upload features if requests and pyimgur are not found
 printImportError = True #Set this to false if you want to disable the warning if pyimgur or requests are not found
@@ -114,7 +113,7 @@ class ImageStore:
                 
     imageDataPadding = [116, 64, 84, 123, 93, 73, 106]
     firstPixelPadding = [92, 101]
-    versionNumber = "3.2.1"
+    versionNumber = "3.2.2"
     maxCutoffModes = 7
     website = "http://peterhuntvfx.co.uk"
     protocols = ["http://", "https://"]
@@ -644,38 +643,28 @@ class ImageStore:
                     cachePath = self.cache( returnPath = True )
                 
                     if os.path.exists( cachePath ):
+                    
                         try:
-                        
-                            textFile = open( cachePath, "r")
-                            
-                            try:
-                            
+                            #Get values from cache
+                            with open( cachePath, "r" ) as textFile:
                                 textFileData = self.decodeData( textFile.read(), decode = True )
-                                                                    
-                                try:
                                 
-                                    currentImageData = textFileData[imageMD5]
-                                    storedCutoffMode = int( currentImageData[0] )
-                                    storedValidPixels = currentImageData[1]
-                                    storedImageURL = currentImageData[2]
-                                    successfulRead = True
-                                    
-                                except:
-                                    pass
-                            except:
-                                pass
-                            textFile.close()
+                                currentImageData = textFileData[imageMD5]
+                                storedCutoffMode = int( currentImageData[0] )
+                                storedValidPixels = currentImageData[1]
+                                storedImageURL = currentImageData[2]
+                                successfulRead = True
                             
                         except:
                             pass
                             
-                        textFile = open( cachePath, "r+")
+                        openCacheMethod = "r+"
                     else:
-                        textFile = open( cachePath, "w")
+                        openCacheMethod = "w"
                         
                     storedImage = self.readImage( storedImageURL )
                 
-                
+                uploadedImageURL = None
                 if successfulRead and storedImage:
                     
                     customImageInputPath = storedImageURL
@@ -728,13 +717,14 @@ class ImageStore:
         else:
             customImageExtension = None
         
-        if ( customImageExtension in formatList.keys() ) and customImageExtension not in ignoreFormats:
+        customImageExtensionDict = formatList.get( customImageExtension, None )
+        if customImageExtensionDict and customImageExtension not in ignoreFormats:
             
             try:
                 if mayaEnvironment:
                     imageType = renderViewFormat[py.getAttr( "defaultRenderGlobals.imageFormat" )][1]
                 else:
-                    imageType = formatList[customImageExtension]
+                    imageType = customImageExtensionDict
             except:
                 imageType = customImageExtension.upper()
                                 
@@ -915,9 +905,9 @@ class ImageStore:
             
             #Write to ini file
             if self.writeToINI:
-                textFileData[imageMD5] = [bestCutoffMode, validPixels, customImageInputPath]
-                textFile.write( self.encodeData( textFileData, encode = True ) )
-                textFile.close()
+                textFileData[imageMD5] = [bestCutoffMode, validPixels, uploadedImageURL]
+                with open( cachePath, openCacheMethod ) as textFile:
+                    textFile.write( self.encodeData( textFileData, encode = True ) )
             
             #Get maximum bytes per bits
             imageBytes = validPixels[cutoffMode][ bitsPerPixelMax ]
@@ -1092,7 +1082,7 @@ class ImageStore:
                         
                         #Add random data
                         for i in xrange( 3 ):
-                            dataRGB[i] = randint( minImageAddition, maxImageAddition )
+                            dataRGB[i] = random.randint( minImageAddition, maxImageAddition )
                     
                     dataRGB = [number[1] for number in dataRGB.items()]
                      
@@ -1131,10 +1121,10 @@ class ImageStore:
                         for i in xrange( 3 ):
                         
                             if rawData[currentProgress+i] in colourIncreaseRange:
-                                dataRGB[i] = rawData[currentProgress+i] + randint( minImageAddition, maxImageAddition )
+                                dataRGB[i] = rawData[currentProgress+i] + random.randint( minImageAddition, maxImageAddition )
                                 
                             elif rawData[currentProgress+i] in colourReduceRange:
-                                dataRGB[i] = rawData[currentProgress+i] - randint( minImageAddition, maxImageAddition )
+                                dataRGB[i] = rawData[currentProgress+i] - random.randint( minImageAddition, maxImageAddition )
                                 
                             else:
                                 dataRGB[i] = rawData[currentProgress+i]
@@ -1602,7 +1592,7 @@ class ImageStore:
         
         #Pad to end with multiple of 3
         for i in xrange( 3-len( pixelData )%3 ):
-            pixelData += [randint( 52, 128 )]
+            pixelData += [random.randint( 52, 128 )]
         
         #Get binary info
         binary = checkInputs.checkBooleanKwargs( kwargs, False, 'b', 'binary', 'useCustomImageMethod' )
@@ -1651,10 +1641,11 @@ class ImageStore:
             if fileExtension == "gif":
                 return None
             
-            if fileExtension not in validFormats.keys():
-                    
-                if fileExtension in allFormats.keys():
-                    fileExtension = allFormats[fileExtension]
+            if not validFormats.get( fileExtension, None ):
+                
+                fileExtensionDict = allFormats.get( fileExtension, None )
+                if fileExtensionDict:
+                    fileExtension = fileExtensionDict
                 else:
                     fileExtension = fileExtension.upper()
                 self.printCurrentProgress( "Error: {0} files not supported by Imgur.".format( fileExtension ) )
@@ -1856,8 +1847,9 @@ class ImageStore:
         if currentRenderer == "mentalRay":
             try:
                 sceneExtension = py.getAttr( "defaultRenderGlobals.imfkey" ).lower()
-                if py.getAttr( "defaultRenderGlobals.imageFormat" ) == 51 and sceneExtension in mentalRayFormats.keys():
-                    renderViewFormat[51] = [[sceneExtension] + mentalRayFormats[sceneExtension]]
+                sceneExtensionDict = mentalRayFormats.get( sceneExtension, None )
+                if py.getAttr( "defaultRenderGlobals.imageFormat" ) == 51 and sceneExtensionDict:
+                    renderViewFormat[51] = [[sceneExtension] + sceneExtensionDict]
             except:
                 pass
         
@@ -1936,28 +1928,29 @@ class ImageStore:
         
     def cache( self, *args, **kwargs ):
         
+        #Read file
         cachePath = "{0}/{1}".format( self.defaultCacheDirectory, self.defaultCacheName )
+        try:
+            with open( cachePath, "r" ) as textFile:
+                content = textFile.read()
+        except:
+            with open( cachePath, "w" ) as textFile:
+                content = self.encodeData( {}, encode = True )
+                textFile.write( content )
         
         #If it should be formatted        
         returnRawValues = checkInputs.checkBooleanKwargs( kwargs, False, 'raw', 'rawValue' )
 
-        
         #Return the path
         returnPath = checkInputs.checkBooleanKwargs( kwargs, False, 'path', 'cachePath', 'loc', 'location', 'cacheLocation', 'returnPath', 'returnLoc', 'returnLocation' )
         if returnPath:
             return cachePath
         
-        #Open file and decode data
-        try:
-            with open( cachePath, "r" ) as textFile:
-                content = textFile.read()
-        except:
-            return None
+        #Decode data
         try:
             outputData = self.decodeData( content, decode = True )
         except:
             outputData = None
-        
         
         #Delete the cache file
         validArgs = checkInputs.validKwargs( kwargs, 'c', 'clear', 'clean', 'clearCache', 'cleanCache', 'delete', 'delCache', 'deleteCache' )
@@ -2009,6 +2002,7 @@ class ImageStore:
         #If the hash should be calculated
         validArgs = checkInputs.validKwargs( kwargs, 'h', 'hash', 'returnHash', 'calculateHash', 'imageHash', 'MD5', 'imageMD5', 'image' )
         returnHash = None
+        
         for i in xrange( len( validArgs ) ):
             try:
                 if kwargs[validArgs[i]]:
@@ -2021,7 +2015,8 @@ class ImageStore:
                     raise ImageStoreError( "can't read image" )
             except:
                 returnHash = None
-        
+                
+        #If the hash should be returned
         if returnHash:
         
             customImage = self.readImage( returnHash )
@@ -2044,39 +2039,59 @@ class ImageStore:
         elif validArgs:
             return None
         
+        #If the hash has been input as an arg
         if args:
-            if args[0] in outputData.keys():
-                imageHash = args[0]
-            else:
+            try:
+                #Make sure outputData is a dictionary, and not None
+                if outputData.get( args[0], None ):
+                    imageHash = args[0]
+                else:
+                    #Double check it's not an image link
+                    newMD5 = self.cache( ImageMD5 = args[0] )
+                    if outputData.get( newMD5, None ):
+                        imageHash = newMD5
+                    else:
+                        raise ImageStoreError()
+            except:
                 imageHash = ImageStore().cache( MD5 = args[0] )
                 
-            if imageHash in outputData.keys():
-                outputData = ImageStore().cache( key = imageHash, raw = True )
-            else:
+            try:
+                if outputData.get( imageHash, None ):
+                    outputData = ImageStore().cache( key = imageHash, raw = True )
+                else:
+                    raise ImageStoreError()
+            except:
                 return None
         
         #Return the stored data
-        return self.formatCache( outputData, returnRawValues )
+        if outputData:
+            return self.formatCache( outputData, returnRawValues )
+        else:
+            return None
 
     def formatCache( self, outputData, returnRawValues = False ):   
     
         if returnRawValues:
             return outputData
-            
+        
         cacheOutput = []
-        for imageHash in outputData.keys():
-            cacheOutput.append( "Hash: {0}".format( imageHash ) )
-            
-            if outputData[imageHash][2]:
-                cacheOutput.append( "   URL: {0}".format( outputData[imageHash][2] ) )
-            cacheOutput.append( "   Best cutoff mode: {0}".format( outputData[imageHash][0] ) )
-            
-            for cutoffMode in outputData[imageHash][1].keys():
-                if outputData[imageHash][1][cutoffMode]:
-                    cacheOutput.append( "      Cutoff mode {0}:".format( cutoffMode ) )
-                    for bitsPerPixel in outputData[imageHash][1][cutoffMode].keys():
-                        cacheOutput.append( "         Storage with {0} bits per pixel: {1}".format( bitsPerPixel, outputData[imageHash][1][cutoffMode][bitsPerPixel]*bitsPerPixel ) ) 
-    
+        if outputData:
+            for imageHash in outputData.keys():
+                cacheOutput.append( "Hash: {0}".format( imageHash ) )
+                
+                if outputData[imageHash][2]:
+                    cacheOutput.append( "   URL: {0}".format( outputData[imageHash][2] ) )
+                cacheOutput.append( "   Best cutoff mode: {0}".format( outputData[imageHash][0] ) )
+                
+                for cutoffMode in outputData[imageHash][1].keys():
+                    if outputData[imageHash][1][cutoffMode]:
+                        cacheOutput.append( "      Cutoff mode {0}:".format( cutoffMode ) )
+                        for bitsPerPixel in outputData[imageHash][1][cutoffMode].keys():
+                            cacheOutput.append( "         Storage with {0} bits per pixel: {1}".format( bitsPerPixel, outputData[imageHash][1][cutoffMode][bitsPerPixel]*bitsPerPixel ) ) 
+        else:
+            cacheOutput.append( "Cache file was corrupted, it has now been reset" )
+            self.cache( cleanCache = True )
+        
         return GlobalValues.newLine.join( cacheOutput )
         
     def readImage( self, location ):
@@ -2154,10 +2169,11 @@ class ImageStore:
         #Set scene format to filetype 
         elif valueType == str:
             
-            if save.lower() in formatList.keys():
+            formatDict = formatList.get( save.lower(), None )
+            if formatDict:
             
                 try:
-                    py.setAttr( "defaultRenderGlobals.imageFormat", formatList[save.lower()] )
+                    py.setAttr( "defaultRenderGlobals.imageFormat", formatDict )
                     py.setAttr( "defaultRenderGlobals.imfkey", save.lower() )
                 except:
                     self.printCurrentProgress( "Error: Can't update scene settings." )
@@ -3056,6 +3072,7 @@ class MayaUserInterface:
         #Get hash of currently selected image
         imageLocation = ImageStore().getImageLocation( py.textField( self.textFieldList["CustomImagePath"], query = True, text = True ) )
         imageHash = ImageStore().cache( MD5 = imageLocation )
+        
         if not imageHash:
             imageHash = "Unable to read image"
         else:
