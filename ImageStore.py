@@ -9,6 +9,7 @@ import zlib
 import cPickle
 import UsefulThings
 import os
+import random
 
 class ISGlobals(object):
     def __init__(self):
@@ -59,7 +60,7 @@ class ImageStoreError(Exception):
     pass
 
 class ImageStore(object):
-    end_of_data = [255, 0]
+    end_of_data = [92,67,104,132,98]
     
     def __init__(self, image_path=None):
         self.defaults = ISGlobals().global_dict
@@ -127,33 +128,28 @@ class ImageStore(object):
         if verify:
             if input_data != self.read():
                 raise ImageStoreError('image failed validation')
-        return 'Saved file: {}'.format(self.image_save_path)
+        print 'Saved file: {}'.format(self.image_save_path)
+        return {'path': self.image_save_path}
     
     def read(self):
         
         try:
             image_input = Image.open(self.image_save_path)
         except IOError:
-            return 'No image file found.'
+            raise IOError('no image file found.')
         
         image_data = UsefulThings.flatten_list(image_input.getdata())
         
         #Truncate end of file
-        counter = 0
         end_of_data_len = len(self.end_of_data)
+        index = 0
         try:
-            for i in range(len(image_data)):
-                if image_data[i] == self.end_of_data[counter]:
-                    counter += 1
-                else:
-                    counter = 0
-                if counter == end_of_data_len-1:
-                    raise SuccessfulTruncate()
-        except SuccessfulTruncate:
-            image_data = image_data[:2 + i - end_of_data_len]
+            while image_data[index:index + end_of_data_len] != self.end_of_data:
+                index = image_data.index(self.end_of_data[0], index + 1)
+        except ValueError:
+            raise ImageStoreError("image doesn't contain valid data.")
         else:
-            return "Image doesn't contain valid data."
+            truncated_data = image_data[:index]
+        truncated_data = ''.join(chr(number) for number in image_data)
         
-        image_data = ''.join(chr(number) for number in image_data)
-        
-        return self.decode(image_data)
+        return self.decode(truncated_data)
