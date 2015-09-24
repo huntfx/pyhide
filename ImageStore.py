@@ -1,59 +1,108 @@
 from __future__ import division
-try:
-    from PIL import Image
-except:
-    raise ImportError( "Python Imaging Library module was not found" )
 from collections import defaultdict
 from math import log
-import cStringIO
-import urllib2
-import zlib
-import cPickle
-import UsefulThings
 import os
 import random
+import cPickle
+import StringIO
+import urllib2
+import webbrowser
+import zlib
+import UsefulThings
 reload(UsefulThings)
 
+try:
+    from PIL import Image
+except ImportError:
+    raise ImportError('python imaging library module was not found')
+    
+#Import internet bits, stop upload features if any don't exist
+global override_upload
+override_upload = False
+try:
+    import pyimgur
+    import requests
+except ImportError:
+    output_text = ['Warning: Error importing pyimgur', ', disabling the upload features.']
+    try:
+        import requests
+    except ImportError:
+        output_text = output_text[0] + [' and requests'] + output_text[1]
+    print ''.join(output_text)
+    override_upload = True
+
+
 class ISGlobals(object):
-    """Class for determining default values, where it
-    will read any changes from a config file.
+    """Class for determining default values, where it will read
+    any changes from a config file.
+    
+    There are three different groups of variables:
+        Required (shown but are reset if edited) - This would
+            mainly be for things to show the user, such as
+            comments. If any variables are like this, there
+            is no point adding them to the config file.
+            
+        Default (shown and can be edited) - These are the core
+            variables used in the code. Things the user would
+            normally pass in through the function, but it
+            allows them to set default values to use all the
+            time.
+            
+        Hidden (not shown but can be edited) - These are the
+            less important variables, which aren't normally
+            needed. Things such as overrides should go here,
+            which can be used if a program uses this code and
+            needs to force a few things to happen.
+    
+    By default, the config file is stored in appdata.
     """
+    config_location = '%APPDATA/VFXConfig.ini'
+    
     def __init__(self, save_all_config_values=False):
+        """Define the default values, then check them against
+        the values stored in the config.
+        """
+        
+        reset_config = True
         
         #Build list of default values
         link_dict = {}
         link_dict['%USERDIR'] = os.path.expanduser( "~" ).replace( "\\", "/" )
         link_dict['%PYTHONDIR'] = os.getcwd().replace( "\\", "/" )
         link_dict['%APPDATA'] = os.getenv('APPDATA')
+        
         required_globals = defaultdict(dict)
-        required_globals['ImageStore']['!DirectoryLinks'] = '%PYTHONDIR, %USERDIR, %APPDATA'
+        required_globals['ImageStore']['!UsableDirectoryLinks'] = '%PYTHONDIR, %USERDIR, %APPDATA'
         default_globals = defaultdict(dict)
         default_globals['ImageStore']['ShowAllValuesHereOnNextRun'] = False
         default_globals['ImageStore']['DefaultImageName'] = 'ImageDataStore.png'
         default_globals['ImageStore']['DefaultImageDirectory'] = '%USERDIR/ImageStore'
-        default_globals['ImageStore']['DefaultCustomImage'] = 'http://'
-        default_globals['ImageStore']['DefaultUpload'] = True
-        default_globals['ImageStore']['DefaultVerify'] = True
+        default_globals['ImageStore']['DefaultCustomImage'] = 'http://bit.ly/1G3u3cV' #Mona Lisa because I had no other ideas
+        default_globals['ImageStore']['UseDefaultCustomImageIfNone'] = False
+        default_globals['ImageStore']['DefaultShouldVerify'] = True
+        default_globals['ImageStore']['DefaultShouldSave'] = True
+        default_globals['ImageStore']['DefaultShouldUpload'] = False
+        default_globals['ImageStore']['DefaultShouldOpenOnUpload'] = True
         hidden_globals = defaultdict(dict)
-        hidden_globals['ImageStore']['CacheName'] = 'ImageStore.cache'
-        hidden_globals['ImageStore']['CacheDirectory'] = '%APPDATA/ImageStore'
-        hidden_globals['ImageStore']['ForceUpload'] = False
-        hidden_globals['ImageStore']['ForceOpenOnUpload'] = False
+        hidden_globals['ImageStore']['ForceDefaultVerify'] = False
         hidden_globals['ImageStore']['ForceNoSave'] = False
-        hidden_globals['ImageStore']['ForceVerify'] = False
-        hidden_globals['ImageStore']['ForceCustomImage'] = False
+        hidden_globals['ImageStore']['ForceNoUpload'] = False
+        hidden_globals['ImageStore']['ForceNoOpenOnUpload'] = False
+        hidden_globals['ImageStore']['ForceDefaultCustomImage'] = False
+        #hidden_globals['ImageStore']['CacheName'] = 'ImageStore.cache'
+        #hidden_globals['ImageStore']['CacheDirectory'] = '%APPDATA/ImageStore'
         required_globals = dict(required_globals)
         default_globals = dict(default_globals)
         hidden_globals = dict(hidden_globals)
         
         #Update the config and get the values
-        config_location = '%APPDATA/VFXConfig.ini'
+        config_location = self.config_location
         for k in link_dict:
             config_location = config_location.replace(k, link_dict[k])
-            
+        
         required_globals = UsefulThings.read_config(config_location, config_sections=required_globals, write_values=True, update_values=True)
-        default_globals = UsefulThings.read_config(config_location, config_sections=default_globals, write_values=True, update_values=False)
-        hidden_globals = UsefulThings.read_config(config_location, config_sections=hidden_globals, write_values=save_all_config_values, update_values=False)
+        default_globals = UsefulThings.read_config(config_location, config_sections=default_globals, write_values=True, update_values=reset_config)
+        hidden_globals = UsefulThings.read_config(config_location, config_sections=hidden_globals, write_values=save_all_config_values, update_values=reset_config)
         
         all_globals = dict(default_globals).copy()
         all_globals['ImageStore'].update(hidden_globals['ImageStore'])
@@ -69,8 +118,14 @@ class ISGlobals(object):
             ISGlobals(True)
     
     def get(self, x):
-        """Easy way of getting a certain value."""
+        """Get a certain default value.
+        This should be used after assigning ISGlobals to a
+        variable, so that it doesn't rebuild the list each
+        time a new variable is looked up.
+        """
         return self.global_dict[x]
+
+ISGlobals()
 
 class ImageStoreError(Exception):
     pass
@@ -118,9 +173,9 @@ class ImageStore(object):
         
         self.print_time = print_time
         
-        #Get a valid image path
+        #Get a valid image path based on the input
+        #Just processes the string, doesn't bother checking if readable/writeable
         self.image_path = image_path
-        self.image_path_original = image_path
         if image_path is None:
             self.image_path = '{}/{}'.format(self.defaults.get('DefaultImageDirectory'), self.defaults.get('DefaultImageName'))
         else:
@@ -129,15 +184,18 @@ class ImageStore(object):
                     image_path = image_path[1:]
                 self.image_path = '{}/'.format(self.defaults.get('DefaultImageDirectory')) + image_path
                 
+        self.image_original_extension = None
         self.image_save_path = self.image_path
-        if '.' in self.image_save_path.split('/')[-1]:
+        image_path_split = self.image_save_path.split('/')
+        if '.' in image_path_split[-1]:
+            self.image_original_extension = image_path_split[-1].split('.')[-1]
             self.image_save_path = self.image_save_path[::-1].split('.', 1)[1][::-1]
         self.image_save_path += '.png'
     
     def encode(self, data):
-        """Encode the image data, this may be edited as long
-        as ImageStore.decode can reverse it.
-        This is where you would add encryption.
+        """Encode the image data, this may be edited as long as 
+        ImageStore.decode can reverse it.
+        This is where you would add encryption if required.
         """
         return zlib.compress(cPickle.dumps(data))
     
@@ -153,19 +211,28 @@ class ImageStore(object):
         file path if it doesn't exist, and will save the image.
         """
         if UsefulThings.make_file_path(self.image_save_path):
-            image_data.save(self.image_save_path, 'PNG')
+            try:
+                image_data.save(self.image_save_path, 'PNG')
+            except IOError:
+                raise IOError('unable to write image')
         else:
-            raise IOError('unable to write image')
+            raise IOError('unable to write image path')
     
     
-    def _read_image(self, image_location): 
+    def _read_image(self, image_location, require_png=False): 
         """Wrapper for opening the image, supports opening from a
         URL or just the computer.
+        
+        Parameters:
+            image_location (str): Path to image.
+            
+            require_png (bool): If the image must be a PNG, 
+                will cause an error if not.
         """
         #Load from URL
         if any(value in image_location for value in ('http://', 'https://', 'ftp://')):
             try:
-                location = cStringIO.StringIO(urllib2.urlopen(image_location).read())
+                image_location = StringIO.StringIO(urllib2.urlopen(image_location).read())
             except urllib2.URLError:
                 raise urllib2.URLError('failed to load image from URL')
                 
@@ -173,7 +240,15 @@ class ImageStore(object):
         try:
             return Image.open(image_location).convert('RGB')
         except IOError:
-            IOError('failed to open image file')
+            if require_png:
+                if self.image_original_extension is not None and 'png' not in self.image_original_extension and 'png' in image_location:
+                    try:
+                        Image.open(image_location.replace('png', self.image_original_extension))
+                        raise ImageStoreError('image format needs to be PNG')
+                    except IOError:
+                       pass
+                raise IOError('no image file found')
+            raise IOError('failed to open image file')
     
     def _print(self, item, indent=' '):
         """Print wrapper to allow disabling all messages."""
@@ -183,7 +258,8 @@ class ImageStore(object):
     def _time(self, verb, TimeThisObject):
         self._print('{}: {}'.format(TimeThisObject.output(), verb), '')
     
-    def write(self, input_data, custom_image=None, image_ratio=None, verify=None):
+    def write(self, input_data, custom_image=None, image_ratio=None, verify=None, save_file=None,
+              upload_file=None, open_on_upload=None, imgur_title=None, imgur_description=None):
         """Write data to an image.
         
         If a custom image is used, bits per byte is calculated.
@@ -206,28 +282,65 @@ class ImageStore(object):
                 possible image will be written but will look
                 like random noise.
             
-            image_ratio (str or None): If the custom image is,
-                not provided, we have no idea of the image dimensions. 
+            image_ratio (str or None): If the custom image is not
+                provided, we have no idea of the image dimensions. 
                 This determins the ratio of with to height.
                 When giving a value, make sure a colon is
-                separating two numbers for it to work.
+                separating two numbers for it to work, such as
+                '4:3'.
                 If None, will default to a 16:9 resolution.
                 
+            verify (bool or None): The code can read the image
+                after writing to make sure the data is intact.
+                This can add a few seconds of processing so
+                you may disable it, though it is recommended
+                to leave activated if uploading images, since
+                Imgur can format them and destroy the data.
+                If None, it will use the default value provided 
+                in the config.
             
-            verify (bool or None): If the code should read the 
-                image after writing to make sure the data is 
-                intact. This can add a few seconds of processing 
-                so you may disable it.
-                If left as None, it will use the default value 
-                provided in the config.
+            save_file (bool or None): If the file should be
+                saved to disk.
+                If None, it will use the default value provided 
+                in the config.
+            
+            upload_file (bool or None): If the file should be
+                uploaded to imgur.
+                If None, it will use the default value provided 
+                in the config.
+                
+            open_on_upload (bool or None): If the uploaded link
+                should be opened by the default web browser.
+                If None, it will use the default value provided 
+                in the config.
+                
+            imgur_title (str or None, optional): Title to give to
+                the Imgur upload.
+                
+            imgur_description (str or None, optional): Description
+                to give to the Imgur upload.
         """
-        with UsefulThings.TimeThis(print_time=False) as t:
+        #Get default values from config
+        if verify is None or self.defaults.get('ForceDefaultVerify'):
+            verify = self.defaults.get('DefaultShouldVerify')
+        if self.defaults.get('ForceNoSave'):
+            save_file = False
+        elif save_file is None:
+            upload_file = self.defaults.get('DefaultShouldSave')
+        if override_upload or self.defaults.get('ForceNoUpload'):
+            upload_file = False
+        else:
+            if upload_file is None:
+                upload_file = self.defaults.get('DefaultShouldUpload')
+            if self.defaults.get('ForceNoOpenOnUpload'):
+                open_on_upload = False
+            elif open_on_upload is None:
+                open_on_upload = self.defaults.get('DefaultShouldOpenOnUpload')
             
-            self._print('Writing to image...', '')
-            
-            if verify is None:
-                verify = self.defaults.get('DefaultVerify')
-            bits_per_byte = 8
+        bits_per_byte = 8
+        
+        self._print('Writing to image...', '')
+        with UsefulThings.TimeThis(print_time=self.print_time) as t:            
                         
             encoded_data = [ord(letter) for letter in self.encode(input_data)]
             self._time('Encoded data', t)
@@ -244,6 +357,14 @@ class ImageStore(object):
             pixel_data = [int(i, 2) for i in num_bytes_new] + encoded_data
             
             self._time('Calculated header', t)
+            
+            #Try read custom image from config if none has been given
+            if (custom_image is None and self.defaults.get('UseDefaultCustomImageIfNone')) or self.defaults.get('ForceDefaultCustomImage'):
+                try:
+                    self._read_image(self.defaults.get('DefaultCustomImage'))
+                    custom_image = self.defaults.get('DefaultCustomImage')
+                except (IOError, urllib2.URLError):
+                    pass
             
             if custom_image is not None:
                 
@@ -281,7 +402,7 @@ class ImageStore(object):
                     
                     #Process both parts of data
                     # joined_binary_data needs to have an extra part added on the end to stop
-                    # a strange error where it occasionally writes the incorrect final bits
+                    # a strange error happening where it occasionally writes the incorrect final bits
                     joined_binary_data = ''.join(str(bin(x))[2:].zfill(8) for x in pixel_data) + '0' * bits_per_byte
                     split_binary_data = UsefulThings.split_list(joined_binary_data, bits_per_byte)
                     num_pixels_needed = len(split_binary_data)
@@ -322,10 +443,13 @@ class ImageStore(object):
                     
                 x = pow(required_pixels * image_ratio_split[0] * image_ratio_split[1], 0.5)
                 
-                image_width = max(3, min(required_pixels, int(round(x/image_ratio_split[1]))))
+                #Don't go over required pixel amount, or try to go under 1 pixel
+                image_width = max(1, min(required_pixels, int(round(x/image_ratio_split[1]))))
                 image_width //= 3
                 image_width *= 3
                 image_height = required_pixels / image_width
+                
+                #Round height up if left as a decimal
                 if float(image_height) != float(int(image_height)):
                     image_height += 1
                 image_height = int(image_height)
@@ -335,7 +459,7 @@ class ImageStore(object):
                 pixel_data += [random.choice(pixel_data) for i in range(3 * (image_height * image_width - required_pixels))]
                 self._time('Padded data', t)
             
-            
+            #Write first byte as header
             initial_header = int(str(num_bytes_integer_parts) + str(bits_per_byte))
             pixel_data[0] = initial_header
             
@@ -350,16 +474,68 @@ class ImageStore(object):
                     image_data[x, y] = tuple(pixel_data[current_progress:current_progress + 3])
             
             self._time('Created image', t)
+                        
+            #Save image
+            if save_file:
+                self._save_image(image_output)
+                self._time('Saved file', t)
+                self._print('Path to file: {}'.format(self.image_save_path), '')
                 
-            self._save_image(image_output)
+                
+            #Build StringIO file
+            output_memory = StringIO.StringIO()
+            image_output.save(output_memory, format='PNG')
+            contents = output_memory.getvalue()
+            output_memory.close()
+                
+            if upload_file:
+                
+                payload = {'image': contents.encode('base64'),
+                           'title': imgur_title, 'description': imgur_description}
+               
+                #Send upload request since pyimgur doesn't support StringIO
+                client = pyimgur.Imgur('0d10882abf66dec')
+                image_upload = client._send_request('https://api.imgur.com/3/image', method='POST', params=payload)
+                uploaded_image_type = image_upload['type'].split('/')[1]
+                uploaded_image_size = image_upload['size']
+                uploaded_image_link = image_upload['link']
+                uploaded_image_delete_link = image_upload['deletehash']
+                
+                self._time('Uploaded image', t)
+                
+                #Detect if image has uploaded correctly, delete if not
+                if uploaded_image_type.lower() == 'png' and uploaded_image_size == len(contents):
+                    self._print('Link to image: {}'.format(uploaded_image_link), '')
+                    self._print('Link to delete image: http://imgur.com/delete/{}'.format(uploaded_image_delete_link), '')
+                    if open_on_upload:
+                        webbrowser.open(uploaded_image_link)
+                else:
+                    self._print('Image failed to upload correctly, possibly too large', '')
+                    upload_file = False
+                    pyimgur.Image(image_upload, client).delete()
+                
+                
             
-            self._time('Saved file', t)
-            if verify:
-                if input_data != ImageStore(self.image_save_path, print_time=False).read():
-                    raise ImageStoreError('image failed validation')
-                self._time('Verified file', t)
-            print 'Saved file at {}'.format(self.image_save_path)
-            return {'path': self.image_save_path}
+            if save_file or upload_file:
+                if verify:
+                    read_save_file = input_data
+                    read_upload_file = input_data
+                    if save_file:
+                        read_save_file = ImageStore(self.image_save_path, print_time=False).read()
+                    if upload_file:
+                        read_upload_file = ImageStore(uploaded_image_link, print_time=False).read()
+                    if read_save_file != read_upload_file or read_save_file != input_data:
+                        raise ImageStoreError('image failed validation')
+                    self._time('Verified file', t)
+                
+                output_path = {'size': len(contents)}
+                if save_file:
+                    output_path['path'] = self.image_save_path
+                if upload_file:
+                    output_path['url'] = uploaded_image_link
+                    output_path['url_delete'] = uploaded_image_delete_link
+                    
+                return output_path
     
     def read(self):
         """Attempt to read the stored data from an image.
@@ -370,18 +546,12 @@ class ImageStore(object):
         split into groups of 8 and converted back to characters,
         it results in the original encoded string.
         """
-        with UsefulThings.TimeThis(print_time=False) as t:
-            
-            self._print('Reading image...', '')
         
-            try:
-                image_input = Image.open(self.image_save_path)
-            except IOError:
-                #The image link will have been edited if not PNG, check the original link
-                _image_name = self.image_path_original.split('/')[-1]
-                if '.' in _image_name and 'png' not in _image_name:
-                    raise ImageStoreError('image format needs to be PNG')
-                raise IOError('no image file found')
+        self._print('Reading image...', '')
+        with UsefulThings.TimeThis(print_time=self.print_time) as t:
+            
+            image_input = self._read_image(self.image_save_path, require_png=True)
+            
             self._time('Read image', t)
             
             #Get data and header
