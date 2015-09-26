@@ -196,6 +196,8 @@ class ImageStore(object):
         universe, so I think it's safe to say nobody will go above it.
     """
     max_data_len = int('1'*8*99, 2)
+    imgur_main = 'http://i.imgur.com'
+    imgur_delete = 'http://imgur.com/delete'
     
     def __init__(self, image_path=None, allow_print=True):
         """Format the image path ready to either read or write.
@@ -284,49 +286,66 @@ class ImageStore(object):
         return False
         
     def _choose_client(self, imgur_auth):
-        """Validate the input client or return the default one."""
+        """Validate the input client or return the default one.
+        Set imgur_auth to False to delete the config value.
+        """
         
         used_auth = 'None'
-        if isinstance(imgur_auth, pyimgur.Imgur):
+        
+        #Decode client from input string
+        if isinstance(imgur_auth, str):
             
             try:
-                #Decode client from input string
                 client = self.decode(imgur_auth, b64=True)
                 
                 if not self._validate_client(client):
                     raise ImageStoreError()
-                used_auth = 'Decoded input'
                             
             except (ImageStoreError, AttributeError):
+                imgur_auth = None
+            else:
+                used_auth = 'Decoded input'
                 
-                #Use raw input as client                        
-                if self._validate_client(imgur_auth):
+        if isinstance(imgur_auth, pyimgur.Imgur):
                 
-                    encoded_client = self.encode(imgur_auth, b64=True)
-                    
-                    self._print('Your encoded client string is as follows. '
-                                'Use this for imgur_auth to bypass the login.')
-                    self._print(encoded_client)
-                    
-                    #Write to config
+            #Use raw input as client                        
+            if self._validate_client(imgur_auth):
+            
+                encoded_client = self.encode(imgur_auth, b64=True)
+                
+                self._print('Your encoded client string is as follows. '
+                            'Use this for imgur_auth to bypass the login.', 1)
+                self._print(encoded_client, 1)
+                
+                #Write to config
+                config_write = defaultdict(dict)
+                config_write['ImageStore'] = {'LastImgurClient': 
+                                              encoded_client}
+                UsefulThings.read_config(ISGlobals.location, 
+                                         config_write, 
+                                         write_values=True, 
+                                         update_values=True)
+                used_auth = 'Input'
+                
+            else:
+                
+                #Move onto next part instead
+                imgur_auth = None
+        
+        if not isinstance(imgur_auth, pyimgur.Imgur):
+            
+            #Reset
+            try:
+                if imgur_auth is False:
                     config_write = defaultdict(dict)
-                    config_write['ImageStore'] = {'LastImgurClient': 
-                                                  encoded_client}
+                    config_write['ImageStore'] = {'LastImgurClient': ''}
                     UsefulThings.read_config(ISGlobals.location, 
                                              config_write, 
                                              write_values=True, 
                                              update_values=True)
-                    used_auth = 'Input'
-                    
-                else:
-                    
-                    #Move onto next part instead
-                    imgur_auth = None
-                                             
-        if not isinstance(imgur_auth, pyimgur.Imgur):
-            
-            try:
-                #Read config for last client
+                    raise ImageStoreError()
+                
+                #Read config for previous client info
                 encoded_client = UsefulThings.read_config(ISGlobals.location)
                 encoded_client = encoded_client['ImageStore']['LastImgurClient']
                 client = self.decode(''.join(encoded_client), b64=True)
@@ -354,7 +373,7 @@ class ImageStore(object):
                 client = self.decode(''.join(encoded_client), b64=True)
                 used_auth = 'Default client'
         
-        self._print('Imgur authentication being used: {}'.format(used_auth))
+        self._print('Imgur authentication being used: {}'.format(used_auth), 1)
         return client
                                                                 
                                                                 
@@ -409,17 +428,17 @@ class ImageStore(object):
                 raise IOError('no image file found')
             raise IOError('failed to open image file')
     
-    def _print(self, item, indent=' '):
+    def _print(self, item, indent_num=0):
         """Print wrapper to allow disabling all messages."""
         if self.allow_print:
-            print '{}{}'.format(indent, item)
+            print '{}{}'.format(' ' * indent_num, item)
     
     def _time(self, verb, TimeThisObject):
         """"Wrapper for formatting the time correctly.
         Allows the format to be easily edited without having to change
         each string.
         """
-        self._print('{}: {}'.format(TimeThisObject.output(), verb), ' ')
+        self._print('{}: {}'.format(TimeThisObject.output(), verb), 1)
     
     def write(self, input_data, custom_image=None, image_ratio=None, 
               verify=None, save_image=None, upload_image=None, 
@@ -512,7 +531,7 @@ class ImageStore(object):
         
         bits_per_byte = 8
         
-        self._print('Writing to image...', '')
+        self._print('Writing to image...', 0)
         with UsefulThings.TimeThis(print_time=self.allow_print) as t:            
                         
             encoded_data = [ord(letter) for letter in self.encode(input_data)]
@@ -534,9 +553,9 @@ class ImageStore(object):
             self._time('Calculated header', t)
             
             #Try read custom image from config if none has been given
-            if (custom_image is None and \
-                self.defaults('UseDefaultCustomImageIfNone')
-                ) or self.defaults('ForceDefaultCustomImage'):
+            if  custom_image is True or (custom_image is None and \
+                self.defaults('UseDefaultCustomImageIfNone')) or \
+                self.defaults('ForceDefaultCustomImage'):
                 
                 try:
                     self._read_image(self.defaults('DefaultCustomImage'))
@@ -557,16 +576,16 @@ class ImageStore(object):
                 total_data_bytes = len(pixel_data) + 1
                 
                 self._print('Image resolution: {}x{} ({} pixels)'.format(
-                               image_width, image_height, max_image_bytes))
-                self._print('Input data: {} bytes'.format(total_data_bytes))
+                                image_width, image_height, max_image_bytes), 1)
+                self._print('Input data: {} bytes'.format(total_data_bytes), 1)
                 bits_per_byte = 1
                 self._print(('Checking the smallest possible '
-                            'bits per byte to use...'))
+                             'bits per byte to use...'), 1)
                 
                 while bits_per_byte < 9:
                     storage_needed = total_data_bytes * (8 / (bits_per_byte))
                     self._print(" {}: Up to {} bytes".format(bits_per_byte, 
-                                                    int(round(storage_needed))))
+                                                int(round(storage_needed))), 1)
                     if storage_needed < max_image_bytes:
                         break
                     bits_per_byte += 1
@@ -617,7 +636,7 @@ class ImageStore(object):
                 
                 else:
                     self._print('Data does not fit in image, '
-                                'reverting to normal method...', '')
+                                'reverting to normal method...', 1)
                 
             if custom_image is None:
                 
@@ -676,13 +695,21 @@ class ImageStore(object):
             self._time('Created image', t)
                                         
                 
-            #Build StringIO file
-            output_StringIO = StringIO.StringIO()
-            image_output.save(output_StringIO, 'PNG')
-            contents = output_StringIO.getvalue()
-            output_StringIO.close()
+            #Save image
+            if save_image:
+                self._save_image(image_output)
+                self._time('Saved file', t)
+                self._print('Path to file: {}'.format(self.path), 2)
+                
+                
                 
             if upload_image:
+                
+                #Build StringIO file
+                output_StringIO = StringIO.StringIO()
+                image_output.save(output_StringIO, 'PNG')
+                contents = output_StringIO.getvalue()
+                output_StringIO.close()
                 
                 client = self._choose_client(imgur_auth)
                            
@@ -714,28 +741,21 @@ class ImageStore(object):
                     
                     i_link = 'Link to image: {}'
                     i_delete = 'Link to delete image: {}/{}'
-                    self._print(i_link.format(uploaded_image_link), '  ')
-                    self._print(i_delete.format('http://imgur.com/delete',
-                                              uploaded_image_delete_link), '  ')
+                    self._print(i_link.format(uploaded_image_link), 2)
+                    self._print(i_delete.format(self.imgur_delete,
+                                              uploaded_image_delete_link), 2)
                     
                     if open_on_upload:
                         webbrowser.open(uploaded_image_link)
                 else:
                     output = 'Image failed to upload correctly - '
-                    self._print('Image failed to upload correctly.')
+                    self._print('Image failed to upload correctly.', 1)
                     if uploaded_image_type.lower() != 'png':
                         output += 'file was too large.'
                     else:
                         output += 'unknown reason'
                     upload_image = False
                     pyimgur.Image(image_upload, client).delete()
-                
-                
-            #Save image
-            if save_image:
-                self._save_image(image_output)
-                self._time('Saved file', t)
-                self._print('Path to file: {}'.format(self.path), '  ')
                 
                 
             #Validate the image
@@ -761,9 +781,12 @@ class ImageStore(object):
                     output_path['path'] = self.path
                 
                 if upload_image:
-                    output_path['url'] = '{}.{}'.format(uploaded_image_id, 
+                    output_path['url'] = '{}/{}.{}'.format(self.imgur_main,
+                                                        uploaded_image_id, 
                                                         uploaded_image_type)
-                    output_path['url_delete'] = uploaded_image_delete_link
+                    output_path['url_delete'] = '{}/{}'.format(
+                                                    self.imgur_delete,
+                                                    uploaded_image_delete_link)
                     
                 return output_path
     
@@ -777,7 +800,7 @@ class ImageStore(object):
         encoded string.
         """
         
-        self._print('Reading image...', '')
+        self._print('Reading image...', 0)
         with UsefulThings.TimeThis(print_time=self.allow_print) as t:
             
             image_input = self._read_image(self.path, 
