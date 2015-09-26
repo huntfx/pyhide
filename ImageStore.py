@@ -10,6 +10,7 @@ import webbrowser
 import zlib
 import UsefulThings
 reload(UsefulThings)
+
 try:
     from PIL import Image
 except ImportError:
@@ -64,7 +65,17 @@ class ISGlobals(object):
     By default, the config file is stored in appdata, though this has
     only been tested on Windows.
     """
-    config_location = '%APPDATA/VFXConfig.ini'
+    
+    #Build list of default values
+    link_dict = {}
+    link_dict['%USERDIR'] = os.path.expanduser( "~" ).replace( "\\", "/" )
+    link_dict['%PYTHONDIR'] = os.getcwd().replace( "\\", "/" )
+    link_dict['%APPDATA'] = os.getenv('APPDATA')
+        
+    location = '%APPDATA/VFXConfig.ini'
+    
+    for k in link_dict:
+        location = location.replace(k, link_dict[k])
     
     def __init__(self, save_all_config_values=False):
         """Define the default values, then check them against the 
@@ -73,11 +84,6 @@ class ISGlobals(object):
         
         reset_config = False
         
-        #Build list of default values
-        link_dict = {}
-        link_dict['%USERDIR'] = os.path.expanduser( "~" ).replace( "\\", "/" )
-        link_dict['%PYTHONDIR'] = os.getcwd().replace( "\\", "/" )
-        link_dict['%APPDATA'] = os.getenv('APPDATA')
         
         required_globals = defaultdict(dict)
         default_globals = defaultdict(dict)
@@ -110,27 +116,22 @@ class ISGlobals(object):
         default_globals = dict(default_globals)
         hidden_globals = dict(hidden_globals)
         
-        #Update the config and get the values
-        config_location = self.config_location
-        for k in link_dict:
-            config_location = config_location.replace(k, link_dict[k])
-        
-        required_globals = UsefulThings.read_config(config_location, 
+        required_globals = UsefulThings.read_config(self.location, 
                                 config_sections=required_globals, 
                                 write_values=True, 
                                 update_values=True)
-        default_globals = UsefulThings.read_config(config_location, 
+        default_globals = UsefulThings.read_config(self.location, 
                                 config_sections=default_globals, 
                                 write_values=True, 
                                 update_values=reset_config)
-        hidden_globals = UsefulThings.read_config(config_location, 
+        hidden_globals = UsefulThings.read_config(self.location, 
                                 config_sections=hidden_globals, 
                                 write_values=save_all_config_values, 
                                 update_values=reset_config)
         
         all_globals = dict(default_globals).copy()
         all_globals['ImageStore'].update(hidden_globals['ImageStore'])
-        self.global_dict = UsefulThings.read_config(config_location, 
+        self.global_dict = UsefulThings.read_config(self.location, 
                                     config_sections=all_globals, 
                                     write_values=False, 
                                     update_values=False)['ImageStore']
@@ -139,8 +140,8 @@ class ISGlobals(object):
                             if k[0] not in ('!', ';')}
         
         #Convert links to the correct format
-        for i in link_dict:
-            self.global_dict = {k: (v.replace(i, link_dict[i]) if 
+        for i in self.link_dict:
+            self.global_dict = {k: (v.replace(i, self.link_dict[i]) if 
                                     isinstance(v, str) else v) 
                                 for k, v in self.global_dict.iteritems()}
         
@@ -241,9 +242,9 @@ class ImageStore(object):
             self.image_original_extension = ip_split[-1].split('.')[-1]
             ip = (ip[::-1].split('.', 1)[1])[::-1]
         ip += '.png'
-        self.image_save_path = ip
+        self.path = ip
     
-    def encode(self, data):
+    def encode(self, data, b64=False):
         """Encode the image data from the raw input into something that
         can be converted into bytes.
         
@@ -251,27 +252,120 @@ class ImageStore(object):
             data (any): Input to encode.
                 Can be in any format, as long as it can be pickled.
         """
-        return zlib.compress(cPickle.dumps(data))
+        data = zlib.compress(cPickle.dumps(data))
+        if b64:
+            data = base64.b64encode(data)
+        return data
     
-    def decode(self, data):
+    def decode(self, data, b64=False):
         """Decode the image data.
         
         Parameters:
             data (str): Output from ImageStore.encode().
         """
         try:
-            return cPickle.loads(zlib.decompress(data))
-        except (cPickle.UnpicklingError, zlib.error):
+            if b64:
+                data = base64.b64decode(data)
+            data = cPickle.loads(zlib.decompress(data))
+            return data
+        except (TypeError, cPickle.UnpicklingError, zlib.error):
             raise ImageStoreError('failed to decode image data')
     
+    def _validate_client(self, client):
+        """Validate the client manually since pyimgur only gives a
+        generic 'Exception' if it is invalid.
+        """
+        if isinstance(client, pyimgur.Imgur):
+            try:
+                return all((client.client_secret is not None,
+                            client.refresh_token is not None))
+            except AttributeError:
+                pass
+        return False
+        
+    def _choose_client(self, imgur_auth):
+        """Validate the input client or return the default one."""
+        
+        used_auth = 'None'
+        if isinstance(imgur_auth, pyimgur.Imgur):
+            
+            try:
+                #Decode client from input string
+                client = self.decode(imgur_auth, b64=True)
+                
+                if not self._validate_client(client):
+                    raise ImageStoreError()
+                used_auth = 'Decoded input'
+                            
+            except (ImageStoreError, AttributeError):
+                
+                #Use raw input as client                        
+                if self._validate_client(imgur_auth):
+                
+                    encoded_client = self.encode(imgur_auth, b64=True)
+                    
+                    self._print('Your encoded client string is as follows. '
+                                'Use this for imgur_auth to bypass the login.')
+                    self._print(encoded_client)
+                    
+                    #Write to config
+                    config_write = defaultdict(dict)
+                    config_write['ImageStore'] = {'LastImgurClient': 
+                                                  encoded_client}
+                    UsefulThings.read_config(ISGlobals.location, 
+                                             config_write, 
+                                             write_values=True, 
+                                             update_values=True)
+                    used_auth = 'Input'
+                    
+                else:
+                    
+                    #Move onto next part instead
+                    imgur_auth = None
+                                             
+        if not isinstance(imgur_auth, pyimgur.Imgur):
+            
+            try:
+                #Read config for last client
+                encoded_client = UsefulThings.read_config(ISGlobals.location)
+                encoded_client = encoded_client['ImageStore']['LastImgurClient']
+                client = self.decode(''.join(encoded_client), b64=True)
+                
+                if not self._validate_client(client):
+                    raise ImageStoreError()
+                used_auth = 'Previously cached client'
+                
+                
+            except (KeyError, ImageStoreError):
+                
+                #Use default client
+                encoded_client = ['eJxtkEtPwzAQhO/+I+0JZf1YO0ckQIpUuL',
+                                  'T0GvmxaS2aEMUpUv89diooIC6RNd9kRrPr',
+                                  'OF5ifzhPrFm+I7B1GDnbriY70yn2cW7Pia',
+                                  'bltWKjYC9pu4qptef5SMMcfbaFDCRrqopl',
+                                  '9kFT7C5ZUVmBovxOmihRScIl6cb8Kea8rx',
+                                  '79h17/7G0c4nDI3Czcek8ptfP7Gw1ZrNne',
+                                  'E1i0VPNaO+ODANTKmBpk6IKiTiqP6I3SeW',
+                                  'jF/un/2QGwlFxBG8tKKJepAlTGcOs6xEC+',
+                                  'yILdjIn8tCwEmc0KpVaA2awrbSU3ngunlH',
+                                  'GBG8EtOVVbAKuLX5WUh8en+9fNrt00z82u',
+                                  'qMgauJ52oi5f7/i9FzTbIxqBXAXnuDAOrN',
+                                  'R5MrigKutqcMgJbfCCZ7dhyd19ArUPmi4=']
+                client = self.decode(''.join(encoded_client), b64=True)
+                used_auth = 'Default client'
+        
+        self._print('Imgur authentication being used: {}'.format(used_auth))
+        return client
+                                                                
+                                                                
     def _save_image(self, image_data):
         """Wrapper for saving the image.
         If the file path doesn't exist, it will be created, then the
         image is saved.
         """
-        if UsefulThings.make_file_path(self.image_save_path):
+        if UsefulThings.make_file_path(self.path):
             try:
-                image_data.save(self.image_save_path, 'PNG')
+                image_data.save(self.path, 'PNG')
             except IOError:
                 raise IOError('unable to write image')
         else:
@@ -325,7 +419,7 @@ class ImageStore(object):
         Allows the format to be easily edited without having to change
         each string.
         """
-        self._print('{}: {}'.format(TimeThisObject.output(), verb), '')
+        self._print('{}: {}'.format(TimeThisObject.output(), verb), ' ')
     
     def write(self, input_data, custom_image=None, image_ratio=None, 
               verify=None, save_image=None, upload_image=None, 
@@ -580,13 +674,7 @@ class ImageStore(object):
                     image_data[x, y] = tuple(pixel_data[cp:cp + 3])
             
             self._time('Created image', t)
-                        
-            #Save image
-            if save_image:
-                self._save_image(image_output)
-                self._time('Saved file', t)
-                self._print('Path to file: {}'.format(self.image_save_path), '')
-                
+                                        
                 
             #Build StringIO file
             output_StringIO = StringIO.StringIO()
@@ -595,46 +683,15 @@ class ImageStore(object):
             output_StringIO.close()
                 
             if upload_image:
-
-                #Send upload request since pyimgur doesn't support StringIO
-                if not isinstance(imgur_auth, pyimgur.Imgur):
-                    
-                    #client = pyimgur.Imgur('0d10882abf66dec')
-                    encoded_client = ['eJxtkEtPwzAQhO/+I+0JZf1YO0ckQIpUuL',
-                                      'T0GvmxaS2aEMUpUv89diooIC6RNd9kRrPr',
-                                      'OF5ifzhPrFm+I7B1GDnbriY70yn2cW7Pia',
-                                      'bltWKjYC9pu4qptef5SMMcfbaFDCRrqopl',
-                                      '9kFT7C5ZUVmBovxOmihRScIl6cb8Kea8rx',
-                                      '79h17/7G0c4nDI3Czcek8ptfP7Gw1ZrNne',
-                                      'E1i0VPNaO+ODANTKmBpk6IKiTiqP6I3SeW',
-                                      'jF/un/2QGwlFxBG8tKKJepAlTGcOs6xEC+',
-                                      'yILdjIn8tCwEmc0KpVaA2awrbSU3ngunlH',
-                                      'GBG8EtOVVbAKuLX5WUh8en+9fNrt00z82u',
-                                      'qMgauJ52oi5f7/i9FzTbIxqBXAXnuDAOrN',
-                                      'R5MrigKutqcMgJbfCCZ7dhyd19ArUPmi4=']
-                    client = cPickle.loads(zlib.decompress(
-                                    base64.b64decode(''.join(encoded_client))))
-                else:
-                    try:
-                        client = cPickle.loads(zlib.decompress(
-                                    base64.b64decode(imgur_auth)))
-                    except (TypeError, zlib.error, cPickle.UnpicklingError):
-                        client = imgur_auth
-                        encoded_client = base64.b64encode(zlib.compress(
-                                            cPickle.dumps(client)))
-                        
-                        self._print('Your encoded client string is as follows.'
-                                    ' Use this for imgur_auth to bypass the '
-                                    'login.')
-                        self._print(encoded_client)
-                    
+                
+                client = self._choose_client(imgur_auth)
+                           
                 #Renew the token
-                try:
+                if self._validate_client(client):
                     client.refresh_access_token()
-                except pyimgur.Exception:
-                    pass
                                 
                                 
+                #Send upload request since pyimgur doesn't support StringIO
                 image_upload = client._send_request(
                                             'https://api.imgur.com/3/image', 
                                             method='POST', 
@@ -656,9 +713,10 @@ class ImageStore(object):
                     uploaded_image_size == len(contents):
                     
                     i_link = 'Link to image: {}'
-                    i_delete = 'Link to delete image: http://imgur.com/delete'
-                    self._print(i_link.format(uploaded_image_link), '')
-                    self._print(i_delete.format(uploaded_image_delete_link), '')
+                    i_delete = 'Link to delete image: {}/{}'
+                    self._print(i_link.format(uploaded_image_link), '  ')
+                    self._print(i_delete.format('http://imgur.com/delete',
+                                              uploaded_image_delete_link), '  ')
                     
                     if open_on_upload:
                         webbrowser.open(uploaded_image_link)
@@ -673,12 +731,20 @@ class ImageStore(object):
                     pyimgur.Image(image_upload, client).delete()
                 
                 
+            #Save image
+            if save_image:
+                self._save_image(image_output)
+                self._time('Saved file', t)
+                self._print('Path to file: {}'.format(self.path), '  ')
+                
+                
+            #Validate the image
             if save_image or upload_image:
                 if verify:
                     read_save_image = input_data
                     read_upload_image = input_data
                     if save_image:
-                        read_save_image = ImageStore(self.image_save_path, 
+                        read_save_image = ImageStore(self.path, 
                                                      allow_print=False).read()
                     if upload_image:
                         read_upload_image = ImageStore(uploaded_image_link, 
@@ -692,7 +758,7 @@ class ImageStore(object):
                 output_path = {'size': len(contents)}
                 
                 if save_image:
-                    output_path['path'] = self.image_save_path
+                    output_path['path'] = self.path
                 
                 if upload_image:
                     output_path['url'] = '{}.{}'.format(uploaded_image_id, 
@@ -714,7 +780,7 @@ class ImageStore(object):
         self._print('Reading image...', '')
         with UsefulThings.TimeThis(print_time=self.allow_print) as t:
             
-            image_input = self._read_image(self.image_save_path, 
+            image_input = self._read_image(self.path, 
                                            require_png=True)
             
             self._time('Read image', t)
@@ -770,18 +836,6 @@ def imgur_log_in():
         print 'Error: Invalid pin number'
         return None
     return client
-
-
-log_in = True
-if __name__ == '__main__':
-    try:
-        client.refresh_access_token()
-    except (NameError, AttributeError):
-        client = None
-    if log_in:
-        if not client:
-            client = imgur_log_in()
-    
 
 
 log_in = True
