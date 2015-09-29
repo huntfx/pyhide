@@ -77,13 +77,13 @@ class ISGlobals(object):
     for k in link_dict:
         location = location.replace(k, link_dict[k])
     
-    def __init__(self, save_all_config_values=False):
+    def __init__(self, save_all=False):
         """Define the default values, then check them against the 
         values stored in the config.
         """
         
+        #Set to true to overwrite all values
         reset_config = False
-        
         
         required_globals = defaultdict(dict)
         default_globals = defaultdict(dict)
@@ -92,7 +92,10 @@ class ISGlobals(object):
         dg = default_globals['ImageStore']
         hg = hidden_globals['ImageStore']
         
-        rg['!UsableDirectoryLinks'] = ('%PYTHONDIR, %USERDIR, %APPDATA')
+        comment_directories = (';You can use %PYTHONDIR, %USERDIR or %APPDATA '
+                               'as links to directories.')
+        rg[comment_directories] = None
+        
         dg['ShowAllValuesHereOnNextRun'] = False
         dg['DefaultImageName'] = 'ImageDataStore.png'
         dg['DefaultImageDirectory'] = '%USERDIR/ImageStore'
@@ -102,6 +105,7 @@ class ISGlobals(object):
         dg['DefaultShouldSave'] = True
         dg['DefaultShouldUpload'] = False
         dg['DefaultShouldOpenOnUpload'] = False
+        
         hg['ForceDefaultVerify'] = False
         hg['ForceNoSave'] = False
         hg['ForceNoUpload'] = False
@@ -109,35 +113,37 @@ class ISGlobals(object):
         hg['ForceDefaultCustomImage'] = False
         
         #Not yet implemented:
-        hg['CacheName'] = 'ImageStore.cache'
-        hg['CacheDirectory'] = '%APPDATA/ImageStore'
+        #hg['CacheName'] = 'ImageStore.cache'
+        #hg['CacheDirectory'] = '%APPDATA/ImageStore'
         
         required_globals = dict(required_globals)
         default_globals = dict(default_globals)
         hidden_globals = dict(hidden_globals)
         
-        required_globals = UsefulThings.read_config(self.location, 
-                                config_sections=required_globals, 
-                                write_values=True, 
-                                update_values=True)
-        default_globals = UsefulThings.read_config(self.location, 
-                                config_sections=default_globals, 
-                                write_values=True, 
-                                update_values=reset_config)
-        hidden_globals = UsefulThings.read_config(self.location, 
-                                config_sections=hidden_globals, 
-                                write_values=save_all_config_values, 
-                                update_values=reset_config)
+        #Write the values to the config
+        config_parser = UsefulThings.NewConfigParser(self.location)
+        required_globals = config_parser.write(required_globals, 
+                                               write_values=True, 
+                                               update_values=True)
+        default_globals = config_parser.write(default_globals, 
+                                              write_values=True, 
+                                              update_values=reset_config)
+        hidden_globals = config_parser.write(hidden_globals, 
+                                             write_values=save_all, 
+                                             update_values=reset_config)
         
+        #Get all the important values
+        #Using write() so the hidden_globals will be returned too
         all_globals = dict(default_globals).copy()
         all_globals['ImageStore'].update(hidden_globals['ImageStore'])
-        self.global_dict = UsefulThings.read_config(self.location, 
-                                    config_sections=all_globals, 
-                                    write_values=False, 
-                                    update_values=False)['ImageStore']
+        
+        self.global_dict = config_parser.write(all_globals, 
+                                               write_values=False, 
+                                               update_values=False)
+        self.global_dict = self.global_dict['ImageStore']
         
         self.global_dict = {k: v for k, v in self.global_dict.iteritems() 
-                            if k[0] not in ('!', ';')}
+                            if k[0] not in config_parser.comment_markers}
         
         #Convert links to the correct format
         for i in self.link_dict:
@@ -145,9 +151,8 @@ class ISGlobals(object):
                                     isinstance(v, str) else v) 
                                 for k, v in self.global_dict.iteritems()}
         
-        if not save_all_config_values and \
-            self.global_dict['ShowAllValuesHereOnNextRun']:
-            ISGlobals(True)
+        if not save_all and self.global_dict['ShowAllValuesHereOnNextRun']:
+            ISGlobals(save_all=True)
     
     def get(self, x):
         """Get one of the stored values.
@@ -288,90 +293,102 @@ class ImageStore(object):
     def _choose_client(self, imgur_auth):
         """Validate the input client or return the default one.
         Set imgur_auth to False to delete the config value.
+        
+        Order of attempts:
+            Decode input string
+            Read raw output from imgur_log_in()
+            Reset config value if imgur_auth == False
+            Read and decode config string
+            Prompt for login details if imgur_auth == True
+            Use default value
         """
+        used_auth = None
+        client = None
+        config_parser = UsefulThings.NewConfigParser(ISGlobals.location)
         
-        used_auth = 'None'
-        
-        #Decode client from input string
+        #Decode client from input string or ask for input
         if isinstance(imgur_auth, str):
             
             try:
-                client = self.decode(imgur_auth, b64=True)
+                client = self.decode(imgur_auth.strip(), b64=True)
                 
                 if not self._validate_client(client):
                     raise ImageStoreError()
                             
             except (ImageStoreError, AttributeError):
                 imgur_auth = None
+                client = None
             else:
                 used_auth = 'Decoded input'
                 
-        if isinstance(imgur_auth, pyimgur.Imgur):
+        if client is None and (isinstance(imgur_auth, pyimgur.Imgur) or 
+                               imgur_auth is True):
+                
+            if imgur_auth is True:
+                imgur_auth = imgur_log_in()
                 
             #Use raw input as client                        
             if self._validate_client(imgur_auth):
             
+                #Write to config
                 encoded_client = self.encode(imgur_auth, b64=True)
+                config_parser.write({'ImageStore': 
+                                        {'LastImgurClient': encoded_client}}, 
+                                    write_values=True, 
+                                    update_values=True)
                 
                 self._print('Your encoded client string is as follows. '
                             'Use this for imgur_auth to bypass the login.', 1)
                 self._print(encoded_client, 1)
                 
-                #Write to config
-                config_write = defaultdict(dict)
-                config_write['ImageStore'] = {'LastImgurClient': 
-                                              encoded_client}
-                UsefulThings.read_config(ISGlobals.location, 
-                                         config_write, 
-                                         write_values=True, 
-                                         update_values=True)
                 used_auth = 'Input'
+                client = imgur_auth
                 
             else:
                 
                 #Move onto next part instead
                 imgur_auth = None
         
-        if not isinstance(imgur_auth, pyimgur.Imgur):
+        if client is None and not isinstance(imgur_auth, pyimgur.Imgur):
             
             #Reset
             try:
                 if imgur_auth is False:
-                    config_write = defaultdict(dict)
-                    config_write['ImageStore'] = {'LastImgurClient': ''}
-                    UsefulThings.read_config(ISGlobals.location, 
-                                             config_write, 
-                                             write_values=True, 
-                                             update_values=True)
                     raise ImageStoreError()
                 
                 #Read config for previous client info
-                encoded_client = UsefulThings.read_config(ISGlobals.location)
-                encoded_client = encoded_client['ImageStore']['LastImgurClient']
+                config_values = config_parser.read()['ImageStore']
+                encoded_client = config_values['LastImgurClient']
                 client = self.decode(''.join(encoded_client), b64=True)
                 
                 if not self._validate_client(client):
                     raise ImageStoreError()
                 used_auth = 'Previously cached client'
-                
-                
+                            
             except (KeyError, ImageStoreError):
                 
-                #Use default client
-                encoded_client = ['eJxtkEtPwzAQhO/+I+0JZf1YO0ckQIpUuL',
-                                  'T0GvmxaS2aEMUpUv89diooIC6RNd9kRrPr',
-                                  'OF5ifzhPrFm+I7B1GDnbriY70yn2cW7Pia',
-                                  'bltWKjYC9pu4qptef5SMMcfbaFDCRrqopl',
-                                  '9kFT7C5ZUVmBovxOmihRScIl6cb8Kea8rx',
-                                  '79h17/7G0c4nDI3Czcek8ptfP7Gw1ZrNne',
-                                  'E1i0VPNaO+ODANTKmBpk6IKiTiqP6I3SeW',
-                                  'jF/un/2QGwlFxBG8tKKJepAlTGcOs6xEC+',
-                                  'yILdjIn8tCwEmc0KpVaA2awrbSU3ngunlH',
-                                  'GBG8EtOVVbAKuLX5WUh8en+9fNrt00z82u',
-                                  'qMgauJ52oi5f7/i9FzTbIxqBXAXnuDAOrN',
-                                  'R5MrigKutqcMgJbfCCZ7dhyd19ArUPmi4=']
-                client = self.decode(''.join(encoded_client), b64=True)
-                used_auth = 'Default client'
+                if not self._validate_client(client):
+                
+                    #Reset config
+                    config_parser.write({'ImageStore': {'LastImgurClient': ''}}, 
+                                        write_values=True, 
+                                        update_values=True)
+                    
+                    #Use default client
+                    encoded_client = ['eJxtkEtPwzAQhO/+I+0JZf1YO0ckQIpUuL',
+                                      'T0GvmxaS2aEMUpUv89diooIC6RNd9kRrPr',
+                                      'OF5ifzhPrFm+I7B1GDnbriY70yn2cW7Pia',
+                                      'bltWKjYC9pu4qptef5SMMcfbaFDCRrqopl',
+                                      '9kFT7C5ZUVmBovxOmihRScIl6cb8Kea8rx',
+                                      '79h17/7G0c4nDI3Czcek8ptfP7Gw1ZrNne',
+                                      'E1i0VPNaO+ODANTKmBpk6IKiTiqP6I3SeW',
+                                      'jF/un/2QGwlFxBG8tKKJepAlTGcOs6xEC+',
+                                      'yILdjIn8tCwEmc0KpVaA2awrbSU3ngunlH',
+                                      'GBG8EtOVVbAKuLX5WUh8en+9fNrt00z82u',
+                                      'qMgauJ52oi5f7/i9FzTbIxqBXAXnuDAOrN',
+                                      'R5MrigKutqcMgJbfCCZ7dhyd19ArUPmi4=']
+                    client = self.decode(''.join(encoded_client), b64=True)
+                    used_auth = 'Default client'
         
         self._print('Imgur authentication being used: {}'.format(used_auth), 1)
         return client
@@ -388,7 +405,7 @@ class ImageStore(object):
             except IOError:
                 raise IOError('unable to write image')
         else:
-            raise IOError('unable to write image path')
+            raise IOError('unable to write image path: {}'.format(self.path))
     
     
     def _read_image(self, image_location, require_png=False): 
@@ -401,6 +418,9 @@ class ImageStore(object):
             require_png (bool): If the image must be a PNG.
                 If True and image isn't a PNG, it will throw an error.
         """
+        if not isinstance(image_location, (str, unicode)):
+            return None
+            
         #Load from URL
         if any(value in image_location for value in ('http://', 
                                                      'https://', 
@@ -416,9 +436,9 @@ class ImageStore(object):
             return Image.open(image_location).convert('RGB')
         except IOError:
             if require_png:
-                if self.image_original_extension is not None and \
-                    'png' not in self.image_original_extension and \
-                    'png' in image_location:
+                if (self.image_original_extension is not None and
+                    'png' not in self.image_original_extension and
+                    'png' in image_location):
                     try:
                         Image.open(image_location.replace('png', 
                                                 self.image_original_extension))
@@ -458,8 +478,8 @@ class ImageStore(object):
             input_data (any): Data to be written to the image.
                 May be in almost any format as it is pickled.
             
-            custom_image (str or None, optional): Path or URL to an 
-                image to write over. 
+            custom_image (str or None/False, optional): Path or URL to 
+                an image to write over. 
                 Since the output has to be a PNG, a large custom image
                 will result in a large file size, no matter what the
                 input data is.
@@ -553,15 +573,18 @@ class ImageStore(object):
             self._time('Calculated header', t)
             
             #Try read custom image from config if none has been given
-            if  custom_image is True or (custom_image is None and \
-                self.defaults('UseDefaultCustomImageIfNone')) or \
-                self.defaults('ForceDefaultCustomImage'):
+            if (custom_image is True or (custom_image is None and
+                self.defaults('UseDefaultCustomImageIfNone')) or
+                self.defaults('ForceDefaultCustomImage')):
                 
                 try:
                     self._read_image(self.defaults('DefaultCustomImage'))
                     custom_image = self.defaults('DefaultCustomImage')
                 except (IOError, urllib2.URLError):
                     pass
+            
+            if custom_image is False:
+                custom_image = None
             
             if custom_image is not None:
                 
@@ -693,24 +716,20 @@ class ImageStore(object):
                     image_data[x, y] = tuple(pixel_data[cp:cp + 3])
             
             self._time('Created image', t)
-                                        
+                    
+            #Build StringIO file
+            output_StringIO = StringIO.StringIO()
+            image_output.save(output_StringIO, 'PNG')
+            contents = output_StringIO.getvalue()
+            output_StringIO.close()                    
                 
-            #Save image
+                
             if save_image:
                 self._save_image(image_output)
                 self._time('Saved file', t)
                 self._print('Path to file: {}'.format(self.path), 2)
                 
-                
-                
-            if upload_image:
-                
-                #Build StringIO file
-                output_StringIO = StringIO.StringIO()
-                image_output.save(output_StringIO, 'PNG')
-                contents = output_StringIO.getvalue()
-                output_StringIO.close()
-                
+            if upload_image:                
                 client = self._choose_client(imgur_auth)
                            
                 #Renew the token
@@ -736,8 +755,8 @@ class ImageStore(object):
                 self._time('Uploaded image', t)
                 
                 #Detect if image has uploaded correctly, delete if not
-                if uploaded_image_type.lower() == 'png' and \
-                    uploaded_image_size == len(contents):
+                if (uploaded_image_type.lower() == 'png' and
+                    uploaded_image_size == len(contents)):
                     
                     i_link = 'Link to image: {}'
                     i_delete = 'Link to delete image: {}/{}'
@@ -770,8 +789,8 @@ class ImageStore(object):
                         read_upload_image = ImageStore(uploaded_image_link, 
                                                        allow_print=False).read()
                     
-                    if read_save_image != read_upload_image or \
-                        read_save_image != input_data:
+                    if (read_save_image != read_upload_image or
+                        read_save_image != input_data):
                         raise ImageStoreError('image failed validation')
                     self._time('Verified file', t)
                 
@@ -859,14 +878,3 @@ def imgur_log_in():
         print 'Error: Invalid pin number'
         return None
     return client
-
-
-log_in = True
-if __name__ == '__main__':
-    try:
-        client.refresh_access_token()
-    except (NameError, AttributeError):
-        client = None
-    if log_in:
-        if not client:
-            client = imgur_log_in()
