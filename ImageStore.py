@@ -407,21 +407,20 @@ class ImageStore(object):
         self._print('Writing to image...', 0)
         with UsefulThings.TimeThis(print_time=self.allow_print) as t:            
                         
-            encoded_data = [ord(letter) for letter in self.encode(input_data)]
-            self._time('Encoded data', t)
-            
-            #Build header info
+            encoded_data = self.encode(input_data)
             num_bytes = len(encoded_data)
+            
             if num_bytes > self.max_data_len:
                 message = 'well done, you just broke the laws of physics'
                 raise ImageStoreError(message)
-            nb_binary = str(bin(num_bytes))[2:]
-            nb_length = len(nb_binary)
-            nb_integer_parts = nb_length // 8 + (1 if nb_length % 8 else 0)
-            nb_total_length = nb_integer_parts * 8
-            nb_new = [nb_binary.zfill(nb_total_length)[i:i+8] 
-                      for i in range(0, nb_total_length, 8)]
-            pixel_data = [int(i, 2) for i in nb_new] + encoded_data
+                
+            encoded_data = [ord(letter) for letter in encoded_data]
+            self._time('Encoded data', t)
+            
+            #Build header info
+            header = ISHeader.build(num_bytes)
+            header_len = len(header)
+            pixel_data = header + encoded_data
             
             self._time('Calculated header', t)
             
@@ -559,7 +558,7 @@ class ImageStore(object):
                 self._time('Padded data', t)
             
             #Write first byte as header
-            initial_header = int(str(nb_integer_parts) + str(bits_per_byte))
+            initial_header = int(str(header_len) + str(bits_per_byte))
             pixel_data[0] = initial_header
             
             #Draw image
@@ -623,7 +622,7 @@ class ImageStore(object):
                 ifttt_post = ['{}: {}'.format(ifttt_headers[i], ifttt_values[i])
                               for i in range(len(ifttt_headers))]
                 headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
-                r=requests.post(ifttt_url.format(ifttt_name, ifttt_key), 
+                requests.post(ifttt_url.format(ifttt_name, ifttt_key), 
                               json={'value1': 'None',
                                     'value2': '<br/>'.join(ifttt_post),
                                     'value3': uploaded_image_link})
@@ -716,9 +715,8 @@ class ImageStore(object):
             
             #Get data and header
             image_data = UsefulThings.flatten_list(image_input.getdata())
-            image_header = str(image_data[0])
-            bytes_per_pixel = int(image_header[-1])
-            nb_parts = int(image_header[:-1])
+            
+            bytes_per_pixel, header_len = ISHeader.read(image_data)
             image_data = image_data[1:]
             self._time('Processed image', t)
             
@@ -730,18 +728,18 @@ class ImageStore(object):
                                     for i in image_data]
                 image_data_binary = ''.join(image_data_parts)
                 image_data_split = UsefulThings.split_list(image_data_binary, 8)
-                num_bytes = int(''.join(image_data_split[:nb_parts]), 2)
+                num_bytes = int(''.join(image_data_split[:header_len]), 2)
                 truncated_data = [int(i, 2) for i in 
-                    image_data_split[nb_parts:num_bytes + nb_parts]]
+                    image_data_split[header_len:num_bytes + header_len]]
             
             else:
                 #Does same as above, but avoids converting the entire 
                 # data to binary to save time
-                nb_raw = image_data[:nb_parts]
+                nb_raw = image_data[:header_len]
                 nb_binary = ''.join(str(bin(i))[2:].zfill(8) 
                     for i in nb_raw)
                 num_bytes = int(nb_binary, 2)
-                truncated_data = image_data[nb_parts:num_bytes + nb_parts]
+                truncated_data = image_data[header_len:num_bytes + header_len]
             
             self._time('Got required data', t)
             
@@ -936,3 +934,31 @@ class ISImgur(object):
             print 'Error: Invalid pin number'
             return None
         return client
+
+class ISHeader(object):
+
+    @classmethod
+    def build(self, num_bytes):
+        """Create the image header."""
+        
+        parts = int(math.log(num_bytes, 256)) + 1
+        
+        output_list = []
+        while parts > 0:
+            parts -= 1
+            multiple = pow(256, parts)
+            truncated_bytes = num_bytes // multiple
+            num_bytes -= truncated_bytes * multiple
+            output_list.append(truncated_bytes)
+            
+        return output_list
+    
+    @classmethod
+    def read(self, data):
+        """Read the image header.
+        Due to the way it is encoded, only the initial part is read.
+        
+        Returns [bits_per_pixel, header_length]
+        """
+        header = str(data[0])
+        return map(int, [header[-1], header[:-1]])
