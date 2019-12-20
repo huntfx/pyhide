@@ -2,16 +2,15 @@ import base64
 import os
 import pickle
 import time
-import urllib.error
-import urllib.parse
-import urllib.request
-from io import StringIO
+import requests
+from io import BytesIO
 from math import ceil
+import zlib
 
 import numpy as np
 from PIL import Image
 
-DEBUG = True
+DEBUG = False
 
 
 def trim_bytes(numpy_array, num_bytes):
@@ -24,20 +23,20 @@ def split_input(value, n):
 
 
 def encode_input(value):
-    return zlib.compress(pickle.dumps(value, protcol=0))
+    return zlib.compress(pickle.dumps(value, protocol=0))
 
 
 def decode_input(value):
     val_bytes = value.encode("latin-1")
-    return pickle.loads(zlib.decompress(value))
+    return pickle.loads(zlib.decompress(val_bytes))
 
 
 def _print(message, value=None, indent=0):
     if DEBUG:
         if value is None:
-            print "{}{}".format(" " * indent, message)
+            print(f"{' ' * indent}{message}")
         else:
-            print "{}{}: {}".format(" " * indent, message, value)
+            print(f"{' ' * indent}{message}: {value}")
 
 
 class Steganography(object):
@@ -54,13 +53,13 @@ class Steganography(object):
         # Detect whether the input should be compressed
         self.enc = True
         if isinstance(input_data, str):
-            print(f"Encoded length: {len(self.i)}")
-            print(f"Normal length: {len(input_data)}")
+            _print(f"Encoded length: {len(self.i)}")
+            _print(f"Normal length: {len(input_data)}")
             if len(self.i) > len(input_data):
                 self.i = input_data
                 self.enc = False
 
-        self.i_ord = [i for i in self.i]
+        self.i_ord = [ord(i) for i in self.i]
         self.i_len = len(self.i_ord)
         if not self.o_ignore:
             self.o_len = len(self.o)
@@ -147,8 +146,7 @@ class Steganography(object):
             extra_length = min(new_byte_len, required_length - new_byte_len)
             new_bytes += new_bytes[:extra_length]
             _print(
-                f"Increased length from {new_byte_len} to {new_byte_len + extra_length}"
-                ),
+                f"Increased length from {new_byte_len} to {new_byte_len + extra_length}",
                 indent=1,
             )
 
@@ -216,11 +214,10 @@ class ImageHelper(object):
     def read_url(self, optional_url=None):
         url = optional_url or self.path
         _print("Downloading URL contents...")
-        try:
-            image_location = StringIO.StringIO(urllib2.urlopen(self.path).read())
-        except urllib2.URLError:
-            raise urllib2.URLError("failed to load image from URL")
-        return self.read_file(image_location)
+        r = requests.get(url)
+        if r.status_code == 200:
+            image_bytes = BytesIO(r.content)
+        return self.read_file(image_bytes)
 
     @classmethod
     def generate_save_info(self, data_len, width, height, ratio):
@@ -249,7 +246,6 @@ class ImageHelper(object):
         height = int(max(1, min(height, data_len)))
 
         while width * height < data_len:
-            # print 'Increased height'
             height += 1
 
         return width, height
@@ -287,20 +283,19 @@ class ImageHelper(object):
                 position = 3 * (x + y * width)
                 px[x, y] = tuple(data[position : position + 3])
 
-        _print("Calculating filesize", indent=1)
-        # Get the filesize
-        temporary_image = StringIO.StringIO()
-        im.save(temporary_image, "PNG")
-        filesize = len(temporary_image.getvalue())
-        temporary_image.close()
-        _print("Filesize", filesize, indent=2)
+        #_print("Calculating filesize", indent=1)
+        ## Get the filesize
+        #temporary_image = StringIO.StringIO()
+        #im.save(temporary_image, "PNG")
+        #filesize = len(temporary_image.getvalue())
+        #temporary_image.close()
+        #_print("Filesize", filesize, indent=2)
 
         im.save(self.path, "PNG")
         _print("Saved image")
 
         self.image = data
         self.size = (width, height)
-        return filesize
 
 
 class ImgurHelper(object):
@@ -348,11 +343,10 @@ class EncodeData(object):
                     width = self.original_size[0]
                 elif height is None and ratio is None:
                     height = self.original_size[1]
-            filesize = ImageHelper(self.path).save(
+            ImageHelper(self.path).save(
                 result["Data"], width=width, height=height, ratio=ratio
             )
             result["Path"] = self.path
-            result["Size"] = filesize
         return result
 
 
@@ -458,3 +452,6 @@ class DecodeImage(object):
             # This needs improvement, but works for now
             path += ".{}".format(self.ext)
         save_file(path, self.decode)
+
+if __name__ == "__main__":
+    DEBUG = True
