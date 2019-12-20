@@ -1,13 +1,14 @@
 import base64
 import os
 import pickle
+import random
 import time
-import requests
+import zlib
 from io import BytesIO
 from math import ceil
-import zlib
 
 import numpy as np
+import requests
 from PIL import Image
 
 DEBUG = False
@@ -58,8 +59,10 @@ class Steganography(object):
             if len(self.i) > len(input_data):
                 self.i = input_data
                 self.enc = False
-
-        self.i_ord = [ord(i) for i in self.i]
+        if isinstance(self.i[0], int):
+            self.i_ord = [i for i in self.i]
+        else:
+            self.i_ord = [ord(i) for i in self.i]
         self.i_len = len(self.i_ord)
         if not self.o_ignore:
             self.o_len = len(self.o)
@@ -184,7 +187,7 @@ class Steganography(object):
 
         _print("Decoding data...")
         encoded_data = split_input(
-                ''.join(f'{i:08b}'[8 - bytes_per_colour:] for i in data), 8
+            "".join(f"{i:08b}"[8 - bytes_per_colour :] for i in data), 8
         )[:num_bytes]
         decoded_data = "".join(chr(int(i, 2)) for i in encoded_data)
 
@@ -283,13 +286,13 @@ class ImageHelper(object):
                 position = 3 * (x + y * width)
                 px[x, y] = tuple(data[position : position + 3])
 
-        #_print("Calculating filesize", indent=1)
+        # _print("Calculating filesize", indent=1)
         ## Get the filesize
-        #temporary_image = StringIO.StringIO()
-        #im.save(temporary_image, "PNG")
-        #filesize = len(temporary_image.getvalue())
-        #temporary_image.close()
-        #_print("Filesize", filesize, indent=2)
+        # temporary_image = StringIO.StringIO()
+        # im.save(temporary_image, "PNG")
+        # filesize = len(temporary_image.getvalue())
+        # temporary_image.close()
+        # _print("Filesize", filesize, indent=2)
 
         im.save(self.path, "PNG")
         _print("Saved image")
@@ -452,6 +455,7 @@ class DecodeImage(object):
             # This needs improvement, but works for now
             path += ".{}".format(self.ext)
         save_file(path, self.decode)
+
 
 if __name__ == "__main__":
     DEBUG = True
