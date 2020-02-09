@@ -71,8 +71,32 @@ class PyHide(object):
                 base = base.ravel()
             
             else:
-                raise NotImplementedError('unable to generate image from flat array')
+                channels = [i for i in 'RGBA' if i in channels]
+                if not channels:
+                    channels = ['L']
+                num_channels = len(channels)
 
+                for bits in range(1, 8):
+                    if self.payload.size <= (base.size * bits) - self.ImageHeaderSize:
+                        break
+                else:
+                    raise ValueError('image not large enough to store data')
+
+                cells = base.size + self.ImageHeaderSize
+
+                # Convert width to be a factor of the total size
+                width = int(round(pow(cells * ratio / num_channels, 0.5)))
+                if base.size % width:
+                    width_ratio = base.size / width
+                    if width_ratio % 1 < 0.5:
+                        multiplier = -1
+                    else:
+                        multiplier = 1
+                    while base.size % width:
+                        width += multiplier
+
+                height = int(cells / width / num_channels)
+                
         # Don't allow strings, file reading should be done before
         elif base is not None:
             raise TypeError('no support for base type "{}"'.format(type(base)))
@@ -91,9 +115,8 @@ class PyHide(object):
         
         else:
             # Calculate how many bits per channel to use
-            cells = base.size - self.ImageHeaderSize
             for bits in range(1, 8):
-                if self.payload.size <= cells * bits:
+                if self.payload.size <= (base.size * bits) - self.ImageHeaderSize:
                     break
             else:
                 raise ValueError('image not large enough to store data')
@@ -176,18 +199,22 @@ class PyHide(object):
 
 if __name__ == '__main__':
     # Get random image from URL
-    wiki_random = 'http://commons.wikimedia.org/wiki/Special:Random/File'
-    image_url = str(requests.get(wiki_random).content).split('fullImageLink')[1].split('src="')[1].split('"')[0]
-    image = image_from_url(image_url)
+    #wiki_random = 'http://commons.wikimedia.org/wiki/Special:Random/File'
+    #image_url = str(requests.get(wiki_random).content).split('fullImageLink')[1].split('src="')[1].split('"')[0]
+    #image = image_from_url(image_url)
+    image = image_from_path(r"D:\Peter\Downloads\rku6ks73wlj01.jpg")
     
     # Generate data to save
     import random
-    hide = PyHide([random.uniform(-100000000, 100000000) for i in range(2000)])
+    hide = PyHide([random.uniform(-100000000, 100000000) for i in range(200000)])
 
     # Test encode over base image
-    encoded_image = hide.image_encode(base=image)
+    encoded_image = hide.image_encode(channels='RGB', base=np.asarray(image).ravel(), ratio=16/9)
+    encoded_image.save(r"D:\Peter\Downloads\test.png")
     assert PyHide.image_decode(encoded_image) == hide.data
 
+    '''
     # Test encode with no base image
     encoded_image = hide.image_encode()
     assert PyHide.image_decode(encoded_image) == hide.data
+    '''
