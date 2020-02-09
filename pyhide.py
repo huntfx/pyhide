@@ -5,7 +5,7 @@ import pickle
 import requests
 import zlib
 from io import BytesIO
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 
 
 logger = logging.getLogger('pyhide')
@@ -14,9 +14,13 @@ logging.basicConfig(level=logging.INFO)
 
 def image_from_url(url):
     """Read a URL to get an Image object."""
+    logger.info('Reading image from "{}"...'.format(url))
     response = requests.get(url, stream=True)
     if response:
-        return Image.open(BytesIO(response.content))
+        try:
+            return Image.open(BytesIO(response.content))
+        except UnidentifiedImageError:
+            raise UnidentifiedImageError("cannot identify image file '{}'".format(url))
     raise RuntimeError('connection failed with status code {}'.format(response.status_code))
 
 
@@ -51,87 +55,114 @@ class PyHide(object):
         Supported modes are L, RGB and RGBA.
         """
         logger.info('Starting image encode...')
+        if channels not in ('L', 'RGB', 'RGBA'):
+            raise TypeError('unsupported channel type "{}"'.format(channels))
         channels = list(channels)
+        num_channels = len(channels)
 
         # Convert any PIL object to array
         if isinstance(base, Image.Image):
             base = np.asarray(base, dtype=int)
 
+        # Prepare base image
         if isinstance(base, np.ndarray):
-            # The format should be in (width, height, depth)
-            # or (width, height) if depth is 1
-            if len(base.shape) >= 2:
-                height = base.shape[0]
-                width = base.shape[1]
+            flat = len(base.shape) < 2
+
+            # Parse the channels input
+            if not flat:
                 try:
-                    channels = [i for i in ('RGB', 'RGBA')[base.shape[2]>3] if i in channels]
+                    image_channels = base.shape[2]
                 except IndexError:
-                    channels = ['L']
-                num_channels = len(channels)
-                base = base.ravel()
-            
-            else:
-                channels = [i for i in 'RGBA' if i in channels]
-                if not channels:
-                    channels = ['L']
-                num_channels = len(channels)
+                    image_channels = 1
 
-                for bits in range(1, 8):
-                    if self.payload.size <= (base.size * bits) - self.ImageHeaderSize:
-                        break
-                else:
-                    raise ValueError('image not large enough to store data')
+                # Delete channels from base if required
+                if num_channels != image_channels:
 
-                cells = base.size + self.ImageHeaderSize
+                    # Delete red and blue channels
+                    if num_channels == 1:
+                        logger.info('Converting base image to luminance...')
+                        base = np.delete(base, 0, axis=2)
+                        base = np.delete(base, slice(1, None), axis=2)
+                        base = base.reshape(base.shape[0], base.shape[1])
+                    
+                    # Create empty red and blue (and alpha) channels
+                    elif image_channels == 1:
+                        flat_base = base.ravel()
+                        insert_points_r = range(0, flat_base.size, 1)
+                        flat_r = np.insert(flat_base, insert_points_r, 255)
+                        insert_points_b = range(2, flat_r.size+2, 2)
+                        flat_b = np.insert(flat_r, insert_points_b, 255)
+                        if num_channels == 4:
+                            insert_points_a = range(3, flat_b.size+3, 3)
+                            flat_a = np.insert(flat_b, insert_points_a, 255)
+                        else:
+                            flat_a = flat_b
+                        base = flat_a.reshape(base.shape[0], base.shape[1], num_channels)
 
-                # Convert width to be a factor of the total size
-                width = int(round(pow(cells * ratio / num_channels, 0.5)))
-                if base.size % width:
-                    width_ratio = base.size / width
-                    if width_ratio % 1 < 0.5:
-                        multiplier = -1
-                    else:
-                        multiplier = 1
-                    while base.size % width:
-                        width += multiplier
+                    # Delete alpha channel
+                    elif num_channels == 3:
+                        logger.info('Converting base image from RGBA to RGB...')
+                        base = np.delete(base, 3, axis=2)
 
-                height = int(cells / width / num_channels)
-                
-        # Don't allow strings, file reading should be done before
-        elif base is not None:
-            raise TypeError('no support for base type "{}"'.format(type(base)))
-        
-        if base is None:
-            bits = 8
-            channels = [i for i in 'RGBA' if i in channels]
-            if not channels:
-                channels = ['L']
-            num_channels = len(channels)
+                    # Create alpha channel
+                    elif num_channels == 4:
+                        flat_base = base.ravel()
+                        insert_points = range(3, flat_base.size+3, 3)
+                        flat_a = np.insert(flat_base, insert_points, 255)
+                        base = flat_a.reshape(base.shape[0], base.shape[1], num_channels)
 
-            cells = (self.payload.size + self.ImageHeaderSize) / bits
-            width = int(round(pow(cells * ratio / num_channels, 0.5)))
-            height = int(math.ceil(cells / width / num_channels))
-            trimmed_base = np.zeros(width * height * num_channels, dtype=int)
-        
-        else:
-            # Calculate how many bits per channel to use
-            for bits in range(1, 8):
+            # Calculate number of bits required
+            for bits in range(1, 9):
                 if self.payload.size <= (base.size * bits) - self.ImageHeaderSize:
                     break
             else:
-                raise ValueError('image not large enough to store data')
+                raise ValueError('image not large enough to store data (need {} byte{}, {} available)'.format(
+                    int(self.payload.size / 8), 's'[:self.payload.size!=8], base.size
+                ))
+
+            # Calculate width and height of image
+            if flat:
+                cells = base.size + self.ImageHeaderSize
+
+                # Ensure width is a factor of the total size
+                width = int(round(pow(cells * ratio / num_channels, 0.5)))
+                height = int(cells / width / num_channels)
+
+                # Since we don't know the base channel count, adjust the array to allow it to reshape
+                total_channels = width * height * num_channels
+                if base.size < total_channels:
+                    np.append(base, [0] * (base.size - total_channels))
+                elif base.size > total_channels:
+                    base = base[:total_channels]
+                
+            else:
+                height = base.shape[0]
+                width = base.shape[1]
+                base = base.ravel()
             
             # Remove the least significant bits from base
             logger.info('Removing least sigificant bits...')
             trimmed_base = base >> bits << bits
             trimmed_base[0:self.ImageHeaderSize] = base[0:self.ImageHeaderSize]
 
+        # Prepare having no base image
+        elif base is None:
+            bits = 8
+            cells = (self.payload.size + self.ImageHeaderSize) / bits
+            width = int(round(pow(cells * ratio / num_channels, 0.5)))
+            height = int(math.ceil(cells / width / num_channels))
+            trimmed_base = np.zeros(width * height * num_channels, dtype=int)
+                
+        # Don't allow strings, file reading should be done before
+        elif base is not None:
+            raise TypeError('no support for base type "{}"'.format(type(base)))
+        
         logger.info('Using {} bit{} per channel on a {}x{} image.'.format(bits, 's'[:bits!=1], width, height))
 
         # Convert the payload to a binary array that matches base
         logger.info('Converting payload to match image...')
         padding = np.append(self.payload, [0] * (bits - self.payload.size % bits))
-        split_payload = pow(2, np.arange(bits)[::-1]) * padding.reshape(padding.size // bits, bits)
+        split_payload = pow(2, np.arange(bits)[::-1]) * padding.reshape((padding.size // bits, bits))
         joined_payload = np.sum(split_payload, axis=1)
 
         # Add the payload to the base array
@@ -199,22 +230,35 @@ class PyHide(object):
 
 if __name__ == '__main__':
     # Get random image from URL
-    #wiki_random = 'http://commons.wikimedia.org/wiki/Special:Random/File'
-    #image_url = str(requests.get(wiki_random).content).split('fullImageLink')[1].split('src="')[1].split('"')[0]
-    #image = image_from_url(image_url)
-    image = image_from_path(r"D:\Peter\Downloads\rku6ks73wlj01.jpg")
+    while True:
+        wiki_random = 'http://commons.wikimedia.org/wiki/Special:Random/File'
+        image_url = str(requests.get(wiki_random).content).split('fullImageLink')[1].split('src="')[1].split('"')[0]
+        try:
+            image = image_from_url(image_url)
+        except UnidentifiedImageError:
+            continue
+        break
     
     # Generate data to save
     import random
-    hide = PyHide([random.uniform(-100000000, 100000000) for i in range(200000)])
+    hide = PyHide([random.uniform(-100000000, 100000000) for i in range(8000)])
 
-    # Test encode over base image
-    encoded_image = hide.image_encode(channels='RGB', base=np.asarray(image).ravel(), ratio=16/9)
-    encoded_image.save(r"D:\Peter\Downloads\test.png")
+    # Test encode over base image (RGB)
+    encoded_image = hide.image_encode(channels='RGB', base=image, ratio=1)
     assert PyHide.image_decode(encoded_image) == hide.data
 
-    '''
+    # Test encode over base image (RGBA)
+    encoded_image = hide.image_encode(channels='RGBA', base=image, ratio=1)
+    assert PyHide.image_decode(encoded_image) == hide.data
+
+    # Test encode over base image (L)
+    encoded_image = hide.image_encode(channels='L', base=image, ratio=1)
+    assert PyHide.image_decode(encoded_image) == hide.data
+
+    # Test encode over flat base image
+    encoded_image = hide.image_encode(base=np.asarray(image).ravel(), ratio=16/9)
+    assert PyHide.image_decode(encoded_image) == hide.data
+
     # Test encode with no base image
     encoded_image = hide.image_encode()
     assert PyHide.image_decode(encoded_image) == hide.data
-    '''
