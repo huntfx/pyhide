@@ -29,6 +29,51 @@ def image_from_path(path):
     return Image.open(path)
 
 
+def set_image_array_depth(image_array, depth):
+    """Set the depth of an image array."""
+    try:
+        image_channels = image_array.shape[2]
+    except IndexError:
+        image_channels = 1
+
+    # Delete channels from base if required
+    if depth != image_channels:
+
+        # Delete red and blue channels
+        if depth == 1:
+            logger.info('Converting base image to luminance...')
+            image_array = np.delete(image_array, 0, axis=2)
+            image_array = np.delete(image_array, slice(1, None), axis=2)
+            image_array = image_array.reshape(image_array.shape[0], image_array.shape[1])
+        
+        # Create empty red and blue (and alpha) channels
+        elif image_channels == 1:
+            flat = image_array.ravel()
+            insert_points_r = range(0, flat.size, 1)
+            flat_r = np.insert(flat, insert_points_r, 255)
+            insert_points_b = range(2, flat_r.size+2, 2)
+            flat_b = np.insert(flat_r, insert_points_b, 255)
+            if depth == 4:
+                insert_points_a = range(3, flat_b.size+3, 3)
+                flat_a = np.insert(flat_b, insert_points_a, 255)
+            else:
+                flat_a = flat_b
+            image_array = flat_a.reshape(image_array.shape[0], image_array.shape[1], depth)
+
+        # Delete alpha channel
+        elif depth == 3:
+            logger.info('Converting base image from RGBA to RGB...')
+            image_array = np.delete(image_array, 3, axis=2)
+
+        # Create alpha channel
+        elif depth == 4:
+            flat = image_array.ravel()
+            insert_points = range(3, flat.size+3, 3)
+            flat_a = np.insert(flat, insert_points, 255)
+            image_array = flat_a.reshape(image_array.shape[0], image_array.shape[1], depth)
+    return image_array
+
+
 class PyHide(object):
     """Encode data in other data with steganography."""
 
@@ -70,46 +115,7 @@ class PyHide(object):
 
             # Parse the channels input
             if not flat:
-                try:
-                    image_channels = base.shape[2]
-                except IndexError:
-                    image_channels = 1
-
-                # Delete channels from base if required
-                if num_channels != image_channels:
-
-                    # Delete red and blue channels
-                    if num_channels == 1:
-                        logger.info('Converting base image to luminance...')
-                        base = np.delete(base, 0, axis=2)
-                        base = np.delete(base, slice(1, None), axis=2)
-                        base = base.reshape(base.shape[0], base.shape[1])
-                    
-                    # Create empty red and blue (and alpha) channels
-                    elif image_channels == 1:
-                        flat_base = base.ravel()
-                        insert_points_r = range(0, flat_base.size, 1)
-                        flat_r = np.insert(flat_base, insert_points_r, 255)
-                        insert_points_b = range(2, flat_r.size+2, 2)
-                        flat_b = np.insert(flat_r, insert_points_b, 255)
-                        if num_channels == 4:
-                            insert_points_a = range(3, flat_b.size+3, 3)
-                            flat_a = np.insert(flat_b, insert_points_a, 255)
-                        else:
-                            flat_a = flat_b
-                        base = flat_a.reshape(base.shape[0], base.shape[1], num_channels)
-
-                    # Delete alpha channel
-                    elif num_channels == 3:
-                        logger.info('Converting base image from RGBA to RGB...')
-                        base = np.delete(base, 3, axis=2)
-
-                    # Create alpha channel
-                    elif num_channels == 4:
-                        flat_base = base.ravel()
-                        insert_points = range(3, flat_base.size+3, 3)
-                        flat_a = np.insert(flat_base, insert_points, 255)
-                        base = flat_a.reshape(base.shape[0], base.shape[1], num_channels)
+                base = set_image_array_depth(base, num_channels)
 
             # Calculate number of bits required
             for bits in range(1, 9):
