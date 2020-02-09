@@ -16,20 +16,20 @@ from functools import wraps
 from io import BytesIO
 try:
     from PIL import Image
+    try:
+        from PIL import UnidentifiedImageError
+    except ImportError:
+        UnidentifiedImageError = IOError
 except ImportError:
     Image = None
-try:
-    from PIL import UnidentifiedImageError
-except ImportError:
-    UnidentifiedImageError = IOError
+    UnidentifiedImageError = SyntaxError  # Avoid accidentally catching exceptions
 
 
 logger = logging.getLogger('pyhide')
-logging.basicConfig(level=logging.INFO)
 
 
 def requires_image(func):
-    """Check the image library exists, or raise a custom exception."""
+    """Check the image library exists, or raise a custom exception message."""
 
     @wraps(func)
     def wrapper(*args, **kwargs):
