@@ -1,4 +1,3 @@
-import base64
 import math
 import logging
 import numpy as np
@@ -41,7 +40,7 @@ class PyHide(object):
             return self._payload
         except AttributeError:
             logger.info('Encoding data...')
-            pickled = base64.b64encode(zlib.compress(pickle.dumps(self.data)))
+            pickled = zlib.compress(pickle.dumps(self.data))
             binary = ''.join(bin(x)[2:].zfill(8) for x in pickled)
             self._payload = np.array(tuple(binary), dtype=int)
             logger.info('Encoded data is {} bytes.'.format(len(self._payload)))
@@ -172,7 +171,7 @@ class PyHide(object):
         encoded = ''.join(chr(int(binary_data[i:i + 8], 2)) for i in range(0, len(binary_data), 8))
 
         logger.info('Completed image decode.')
-        return pickle.loads(zlib.decompress(base64.b64decode(encoded)))
+        return pickle.loads(zlib.decompress(encoded.encode('latin-1')))
 
 
 if __name__ == '__main__':
