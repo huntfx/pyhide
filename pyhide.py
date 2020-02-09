@@ -1,15 +1,27 @@
-import math
+"""Use steganography to hide data in images."""
+
+from __future__ import division
+
+__all__ = ['PyHide', 'image_from_url', 'image_from_path']
+__version__ = '1.0.0'
+
 import logging
+import math
 import numpy as np
 import pickle
 import requests
+import sys
 import zlib
 from functools import wraps
 from io import BytesIO
 try:
-    from PIL import Image, UnidentifiedImageError
+    from PIL import Image
 except ImportError:
     Image = None
+try:
+    from PIL import UnidentifiedImageError
+except ImportError:
+    UnidentifiedImageError = IOError
 
 
 logger = logging.getLogger('pyhide')
@@ -29,7 +41,7 @@ def requires_image(func):
 
 @requires_image
 def image_from_url(url):
-    """Read a URL to get an Image object."""
+    """Conveniance function to get an Image object from a URL."""
 
     logger.info('Reading image from "{}"...'.format(url))
     response = requests.get(url, stream=True)
@@ -43,7 +55,7 @@ def image_from_url(url):
 
 @requires_image
 def image_from_path(path):
-    """Read a path to get an Image object."""
+    """Conveniance function to get an Image object from a path."""
 
     return Image.open(path)
 
@@ -112,22 +124,23 @@ class PyHide(object):
         except AttributeError:
             logger.info('Encoding data...')
             pickled = zlib.compress(pickle.dumps(self.data))
+            if sys.version_info.major < 3:
+                pickled = map(ord, pickled)
             binary = ''.join(bin(x)[2:].zfill(8) for x in pickled)
             self._payload = np.array(tuple(binary), dtype=int)
             logger.info('Encoded data is {} bytes.'.format(len(self._payload)))
         return self._payload
 
     @requires_image
-    def image_encode(self, channels='RGBA', base=None, ratio=1):
+    def image_encode(self, mode='RGBA', base=None, ratio=1):
         """Encode data to an image.
         Supported modes are L, RGB and RGBA.
         """
 
         logger.info('Starting image encode...')
-        if channels not in ('L', 'RGB', 'RGBA'):
-            raise TypeError('unsupported channel type "{}"'.format(channels))
-        channels = list(channels)
-        num_channels = len(channels)
+        if mode not in ('L', 'RGB', 'RGBA'):
+            raise TypeError('unsupported channel type "{}"'.format(mode))
+        channels = len(mode)
 
         # Convert any PIL object to array
         if isinstance(base, Image.Image):
@@ -139,7 +152,7 @@ class PyHide(object):
 
             # Parse the channels input
             if not flat:
-                base = set_image_array_depth(base, num_channels)
+                base = set_image_array_depth(base, channels)
 
             # Calculate number of bits required
             for bits in range(1, 9):
@@ -155,11 +168,11 @@ class PyHide(object):
                 cells = base.size + self.ImageHeaderSize
 
                 # Ensure width is a factor of the total size
-                width = int(round(pow(cells * ratio / num_channels, 0.5)))
-                height = int(cells / width / num_channels)
+                width = int(round(pow(cells * ratio / channels, 0.5)))
+                height = int(cells / width / channels)
 
                 # Since we don't know the base channel count, adjust the array to allow it to reshape
-                total_channels = width * height * num_channels
+                total_channels = width * height * channels
                 if base.size < total_channels:
                     np.append(base, [0] * (base.size - total_channels))
                 elif base.size > total_channels:
@@ -179,9 +192,9 @@ class PyHide(object):
         elif base is None:
             bits = 8
             cells = (self.payload.size + self.ImageHeaderSize) / bits
-            width = int(round(pow(cells * ratio / num_channels, 0.5)))
-            height = int(math.ceil(cells / width / num_channels))
-            trimmed_base = np.zeros(width * height * num_channels, dtype=int)
+            width = int(round(pow(cells * ratio / channels, 0.5)))
+            height = int(math.ceil(cells / width / channels))
+            trimmed_base = np.zeros(width * height * channels, dtype=int)
                 
         # Don't allow strings, file reading should be done before
         elif base is not None:
@@ -191,7 +204,10 @@ class PyHide(object):
 
         # Convert the payload to a binary array that matches base
         logger.info('Converting payload to match image...')
-        padding = np.append(self.payload, [0] * (bits - self.payload.size % bits))
+        if self.payload.size % bits:
+            padding = np.append(self.payload, [0] * (bits - self.payload.size % bits))
+        else:
+            padding = self.payload
         split_payload = pow(2, np.arange(bits)[::-1]) * padding.reshape((padding.size // bits, bits))
         joined_payload = np.sum(split_payload, axis=1)
 
@@ -211,22 +227,22 @@ class PyHide(object):
 
         # Create image
         logger.info('Generating image...')
-        if num_channels == 1:
+        if channels == 1:
             shaped = final.reshape((height, width))
         else:
-            shaped = final.reshape((height, width, num_channels))
+            shaped = final.reshape((height, width, channels))
 
         try:
             image = Image.fromarray(np.uint8(shaped))
             
          # Fallback to slow method if PIL somehow fails
         except TypeError:
-            image = Image.new(''.join(channels), (width, height))
+            image = Image.new(mode, (width, height))
             pixel_data = image.load()
             for y in range(height):
                 for x in range(width):
-                    position = num_channels * (x + y * width)
-                    pixel_data[x, y] = tuple(final[position:position + num_channels])
+                    position = channels * (x + y * width)
+                    pixel_data[x, y] = tuple(final[position:position + channels])
 
         logger.info('Completed image encode.')
         return image
@@ -257,7 +273,9 @@ class PyHide(object):
         encoded = ''.join(chr(int(binary_data[i:i + 8], 2)) for i in range(0, len(binary_data), 8))
 
         logger.info('Completed image decode.')
-        return pickle.loads(zlib.decompress(encoded.encode('latin-1')))
+        if sys.version_info.major > 2:
+            encoded = encoded.encode('latin-1')
+        return pickle.loads(zlib.decompress(encoded))
 
 
 if __name__ == '__main__':
@@ -276,15 +294,15 @@ if __name__ == '__main__':
     hide = PyHide([random.uniform(-100000000, 100000000) for i in range(8000)])
 
     # Test encode over base image (RGB)
-    encoded_image = hide.image_encode(channels='RGB', base=image, ratio=1)
+    encoded_image = hide.image_encode(mode='RGB', base=image, ratio=1)
     assert PyHide.image_decode(encoded_image) == hide.data
 
     # Test encode over base image (RGBA)
-    encoded_image = hide.image_encode(channels='RGBA', base=image, ratio=1)
+    encoded_image = hide.image_encode(mode='RGBA', base=image, ratio=1)
     assert PyHide.image_decode(encoded_image) == hide.data
 
     # Test encode over base image (L)
-    encoded_image = hide.image_encode(channels='L', base=image, ratio=1)
+    encoded_image = hide.image_encode(mode='L', base=image, ratio=1)
     assert PyHide.image_decode(encoded_image) == hide.data
 
     # Test encode over flat base image
