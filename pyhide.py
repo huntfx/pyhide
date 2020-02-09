@@ -4,16 +4,33 @@ import numpy as np
 import pickle
 import requests
 import zlib
+from functools import wraps
 from io import BytesIO
-from PIL import Image, UnidentifiedImageError
+try:
+    from PIL import Image, UnidentifiedImageError
+except ImportError:
+    Image = None
 
 
 logger = logging.getLogger('pyhide')
 logging.basicConfig(level=logging.INFO)
 
 
+def requires_image(func):
+    """Check the image library exists, or raise a custom exception."""
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if Image is None:
+            raise ImportError('pillow module required for image processing')
+        return func(*args, **kwargs)
+    return wrapper
+
+
+@requires_image
 def image_from_url(url):
     """Read a URL to get an Image object."""
+
     logger.info('Reading image from "{}"...'.format(url))
     response = requests.get(url, stream=True)
     if response:
@@ -24,13 +41,17 @@ def image_from_url(url):
     raise RuntimeError('connection failed with status code {}'.format(response.status_code))
 
 
+@requires_image
 def image_from_path(path):
     """Read a path to get an Image object."""
+
     return Image.open(path)
 
 
+@requires_image
 def set_image_array_depth(image_array, depth):
     """Set the depth of an image array."""
+    
     try:
         image_channels = image_array.shape[2]
     except IndexError:
@@ -85,6 +106,7 @@ class PyHide(object):
     @property
     def payload(self):
         """Data formatted as a binary array."""
+
         try:
             return self._payload
         except AttributeError:
@@ -95,10 +117,12 @@ class PyHide(object):
             logger.info('Encoded data is {} bytes.'.format(len(self._payload)))
         return self._payload
 
+    @requires_image
     def image_encode(self, channels='RGBA', base=None, ratio=1):
         """Encode data to an image.
         Supported modes are L, RGB and RGBA.
         """
+
         logger.info('Starting image encode...')
         if channels not in ('L', 'RGB', 'RGBA'):
             raise TypeError('unsupported channel type "{}"'.format(channels))
@@ -208,8 +232,10 @@ class PyHide(object):
         return image
     
     @classmethod
+    @requires_image
     def image_decode(cls, image):
         """Get data from a previously encoded image."""
+        
         if isinstance(image, Image.Image):
             image = np.asarray(image, dtype=int)
         flattened = image.ravel()
